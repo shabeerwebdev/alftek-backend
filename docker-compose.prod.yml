@@ -1,0 +1,160 @@
+version: '3.8'
+
+# ==================================================
+# AlfTekPro HRMS - Production Docker Compose
+# ==================================================
+# This file is a reference for production deployment.
+# In production, use managed services instead:
+# - Azure Database for PostgreSQL (Flexible Server)
+# - Azure Redis Cache
+# - Azure App Service for containers
+# - Azure Blob Storage (not Azurite)
+
+services:
+  # API Service
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    image: ${DOCKER_REGISTRY:-alftekpro.azurecr.io}/hrms-api:${IMAGE_TAG:-latest}
+    container_name: alftekpro-api-prod
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=${DATABASE_CONNECTION_STRING}
+      - Redis__ConnectionString=${REDIS_CONNECTION_STRING}
+      - Redis__InstanceName=alftekpro:
+      - JWT__Secret=${JWT_SECRET}
+      - JWT__Issuer=AlfTekPro.HRMS
+      - JWT__Audience=AlfTekPro.HRMS.Client
+      - JWT__ExpiryMinutes=60
+      - AzureStorage__ConnectionString=${AZURE_STORAGE_CONNECTION}
+      - AzureStorage__ContainerName=hrms-storage
+      - Hangfire__DashboardEnabled=false
+      - Serilog__MinimumLevel__Default=Warning
+      - Serilog__MinimumLevel__Override__Microsoft=Warning
+      - Serilog__MinimumLevel__Override__System=Warning
+    ports:
+      - "80:80"
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - alftekpro-network
+
+  # Worker Service
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.Worker
+      target: production
+    image: ${DOCKER_REGISTRY:-alftekpro.azurecr.io}/hrms-worker:${IMAGE_TAG:-latest}
+    container_name: alftekpro-worker-prod
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=${DATABASE_CONNECTION_STRING}
+      - Redis__ConnectionString=${REDIS_CONNECTION_STRING}
+      - Redis__InstanceName=alftekpro:
+      - AzureStorage__ConnectionString=${AZURE_STORAGE_CONNECTION}
+      - AzureStorage__ContainerName=hrms-storage
+      - Serilog__MinimumLevel__Default=Information
+      - Serilog__MinimumLevel__Override__Hangfire=Warning
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      replicas: 1
+      update_config:
+        order: stop-first
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "AlfTekPro.Worker"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - alftekpro-network
+
+networks:
+  alftekpro-network:
+    driver: bridge
+    name: alftekpro-network-prod
+
+# ==================================================
+# Production Deployment Notes:
+# ==================================================
+# 1. Environment Variables:
+#    - Set in Azure App Service Configuration or Key Vault
+#    - Never commit .env file with production secrets
+#
+# 2. Database:
+#    - Use Azure Database for PostgreSQL (Flexible Server)
+#    - Enable automatic backups (7-35 days retention)
+#    - Configure firewall rules
+#    - Example: DATABASE_CONNECTION_STRING=
+#      Host=alftekpro-db.postgres.database.azure.com;
+#      Port=5432;Database=alftekpro_hrms;
+#      Username=admin;Password=***;SslMode=Require;
+#
+# 3. Redis:
+#    - Use Azure Redis Cache (Standard or Premium tier)
+#    - Enable data persistence (Premium tier)
+#    - Example: REDIS_CONNECTION_STRING=
+#      alftekpro-redis.redis.cache.windows.net:6380,
+#      password=***,ssl=True,abortConnect=False
+#
+# 4. Storage:
+#    - Use Azure Blob Storage (not Azurite)
+#    - Configure lifecycle management policies
+#    - Enable soft delete for recovery
+#    - Example: AZURE_STORAGE_CONNECTION=
+#      DefaultEndpointsProtocol=https;
+#      AccountName=alftekprostorage;
+#      AccountKey=***;
+#      EndpointSuffix=core.windows.net
+#
+# 5. SSL/TLS:
+#    - Terminate SSL at Azure Application Gateway or Front Door
+#    - Or enable HTTPS in the container with certificates
+#
+# 6. Monitoring:
+#    - Azure Application Insights for APM
+#    - Azure Monitor for infrastructure metrics
+#    - Log Analytics for centralized logging
+#
+# 7. Scaling:
+#    - Horizontal: Increase replicas (API: 2-10, Worker: 1-3)
+#    - Vertical: Adjust CPU/Memory limits
+#
+# 8. CI/CD:
+#    - Use GitHub Actions or Azure DevOps
+#    - Build images and push to Azure Container Registry
+#    - Deploy to Azure App Service or AKS
+#
+# ==================================================

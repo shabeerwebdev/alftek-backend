@@ -1,0 +1,2717 @@
+openapi: 3.0.3
+info:
+  title: AlfTekPro Multi-Tenant HRMS API
+  version: 1.0.0
+  description: |
+    Multi-tenant HRMS system with row-level isolation, supporting multiple regions (UAE, USA, India).
+
+    ## Architecture
+    - **Authentication**: JWT Bearer tokens with tenant_id in claims
+    - **Multi-Tenancy**: Row-level isolation with automatic query filtering
+    - **Regions**: UAE (RTL/Arabic), USA (LTR/English), India (LTR/Hindi)
+
+    ## Key Features
+    - Employee Management with Temporal Job History
+    - Shift & Roster Management
+    - Attendance Tracking with Geofencing
+    - Leave Management with Approval Workflows
+    - Unified Action Center for Approvals
+    - Payroll Processing with Regional Logic
+    - Asset Management
+    - Dynamic Forms (Region-Specific Fields)
+
+  contact:
+    name: AlfTekPro Support
+    email: support@alftekpro.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.alftekpro.com/v1
+    description: Production Server
+  - url: https://dev-api.alftekpro.com/v1
+    description: Development Server
+  - url: http://localhost:5001/v1
+    description: Local Development
+
+tags:
+  - name: Auth
+    description: Authentication and authorization endpoints
+  - name: Platform
+    description: Platform management (Tenants, Regions, Documents)
+  - name: Employees
+    description: Employee management with temporal job history
+  - name: Departments
+    description: Department hierarchy management
+  - name: Designations
+    description: Job designation management
+  - name: Locations
+    description: Office location management
+  - name: Shifts
+    description: Shift master data management
+  - name: Roster
+    description: Employee shift roster assignment
+  - name: Attendance
+    description: Attendance tracking with clock-in/out
+  - name: Leave
+    description: Leave management and approval
+  - name: Workflow
+    description: Action Center and task management
+  - name: Payroll
+    description: Payroll processing and payslip generation
+  - name: Assets
+    description: Asset management and assignment
+  - name: Forms
+    description: Dynamic form schema management
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ==================== AUTH MODULE ====================
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: User login
+      description: Authenticate user and return JWT token with tenant context
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      description: Generate new access token using refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshTokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: User logout
+      description: Invalidate refresh token
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  # ==================== PLATFORM MODULE ====================
+  /tenants/onboard:
+    post:
+      tags:
+        - Platform
+      summary: Tenant onboarding
+      description: Create new tenant account (public endpoint)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantOnboardRequest'
+      responses:
+        '201':
+          description: Tenant created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantOnboardResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Subdomain already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tenants/check-domain:
+    get:
+      tags:
+        - Platform
+      summary: Check subdomain availability
+      description: Validate if subdomain is available for registration
+      security: []
+      parameters:
+        - name: subdomain
+          in: query
+          required: true
+          schema:
+            type: string
+          example: acme
+      responses:
+        '200':
+          description: Subdomain availability status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      available:
+                        type: boolean
+
+  /regions:
+    get:
+      tags:
+        - Platform
+      summary: Get all regions
+      description: Retrieve list of supported regions with localization settings
+      security: []
+      responses:
+        '200':
+          description: List of regions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Region'
+
+  /documents/upload:
+    post:
+      tags:
+        - Platform
+      summary: Upload document
+      description: |
+        Generic document upload endpoint for files like passports, visas, etc.
+        Returns a fileKey that can be stored in dynamicData JSON fields.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Document file to upload
+      responses:
+        '200':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      fileKey:
+                        type: string
+                        description: Unique identifier for the uploaded file
+                      url:
+                        type: string
+                        description: Public URL or SAS URL to access the file
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ==================== EMPLOYEES MODULE ====================
+  /employees:
+    get:
+      tags:
+        - Employees
+      summary: Get all employees
+      description: Retrieve paginated list of employees with current job info
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Active, Notice, Exited]
+        - name: departmentId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: search
+          in: query
+          description: Search by name, email, or employee code
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of employees
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/EmployeeListItem'
+                      totalCount:
+                        type: integer
+                      pageNumber:
+                        type: integer
+                      pageSize:
+                        type: integer
+
+    post:
+      tags:
+        - Employees
+      summary: Create new employee
+      description: Create employee with initial job history record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEmployeeRequest'
+      responses:
+        '201':
+          description: Employee created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      employeeId:
+                        type: string
+                        format: uuid
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /employees/{id}:
+    get:
+      tags:
+        - Employees
+      summary: Get employee details
+      description: Retrieve employee with current job information and dynamic data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Employee details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/EmployeeDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Employees
+      summary: Update employee
+      description: Update employee basic information (not job history)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEmployeeRequest'
+      responses:
+        '200':
+          description: Employee updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /employees/{id}/job-history:
+    get:
+      tags:
+        - Employees
+      summary: Get employee job history
+      description: Retrieve temporal job history (promotions, transfers, etc.)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job history records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JobHistoryRecord'
+
+  /employees/{id}/promote:
+    post:
+      tags:
+        - Employees
+      summary: Promote or transfer employee
+      description: Create new job history record (closes current record)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromoteEmployeeRequest'
+      responses:
+        '200':
+          description: Employee promoted/transferred successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /employees/bulk-import:
+    post:
+      tags:
+        - Employees
+      summary: Bulk import employees
+      description: Upload CSV file for asynchronous processing via Hangfire
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file with employee data
+      responses:
+        '202':
+          description: Import job queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      jobId:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        example: Queued
+
+  /employees/bulk-import/{jobId}/status:
+    get:
+      tags:
+        - Employees
+      summary: Get bulk import status
+      description: Poll status of async import job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Import job status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/BulkImportStatus'
+
+  # ==================== DEPARTMENTS MODULE ====================
+  /departments:
+    get:
+      tags:
+        - Departments
+      summary: Get all departments
+      description: Retrieve department hierarchy
+      responses:
+        '200':
+          description: List of departments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Department'
+
+    post:
+      tags:
+        - Departments
+      summary: Create department
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDepartmentRequest'
+      responses:
+        '201':
+          description: Department created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      departmentId:
+                        type: string
+                        format: uuid
+
+  # ==================== DESIGNATIONS MODULE ====================
+  /designations:
+    get:
+      tags:
+        - Designations
+      summary: Get all designations
+      responses:
+        '200':
+          description: List of designations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Designation'
+
+    post:
+      tags:
+        - Designations
+      summary: Create designation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDesignationRequest'
+      responses:
+        '201':
+          description: Designation created
+
+  # ==================== LOCATIONS MODULE ====================
+  /locations:
+    get:
+      tags:
+        - Locations
+      summary: Get all locations
+      responses:
+        '200':
+          description: List of office locations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Location'
+
+    post:
+      tags:
+        - Locations
+      summary: Create location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLocationRequest'
+      responses:
+        '201':
+          description: Location created
+
+  # ==================== SHIFTS MODULE ====================
+  /shifts:
+    get:
+      tags:
+        - Shifts
+      summary: Get all shifts
+      description: Retrieve shift master data
+      responses:
+        '200':
+          description: List of shifts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShiftMaster'
+
+    post:
+      tags:
+        - Shifts
+      summary: Create shift
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShiftRequest'
+      responses:
+        '201':
+          description: Shift created successfully
+
+  # ==================== ROSTER MODULE ====================
+  /roster:
+    post:
+      tags:
+        - Roster
+      summary: Assign shift to employees (supports bulk)
+      description: Create or update employee roster entries for multiple employees
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignShiftRequest'
+      responses:
+        '200':
+          description: Shift assigned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /roster/{employeeId}:
+    get:
+      tags:
+        - Roster
+      summary: Get employee roster
+      description: Retrieve shift assignments for employee
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: fromDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Employee roster
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RosterEntry'
+
+  # ==================== ATTENDANCE MODULE ====================
+  /attendance/clock-in:
+    post:
+      tags:
+        - Attendance
+      summary: Clock in
+      description: Record employee clock-in with geofence validation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClockInRequest'
+      responses:
+        '200':
+          description: Clock-in successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      clockInTime:
+                        type: string
+                        format: time
+                      isLate:
+                        type: boolean
+                      lateByMinutes:
+                        type: integer
+                  message:
+                    type: string
+        '400':
+          description: Geofence validation failed or already clocked in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /attendance/clock-out:
+    post:
+      tags:
+        - Attendance
+      summary: Clock out
+      description: Record employee clock-out
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClockOutRequest'
+      responses:
+        '200':
+          description: Clock-out successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      workedHours:
+                        type: number
+                        format: float
+
+  /attendance/logs:
+    get:
+      tags:
+        - Attendance
+      summary: Get attendance logs
+      description: Retrieve attendance records with filtering
+      parameters:
+        - name: employeeId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Attendance logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AttendanceLog'
+                      totalCount:
+                        type: integer
+
+  /attendance/bulk-approve:
+    post:
+      tags:
+        - Attendance
+      summary: Bulk approve attendance
+      description: Approve attendance for multiple employees
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkApproveAttendanceRequest'
+      responses:
+        '200':
+          description: Attendance approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      approvedCount:
+                        type: integer
+
+  # ==================== LEAVE MODULE ====================
+  /leave/types:
+    get:
+      tags:
+        - Leave
+      summary: Get leave types
+      description: Retrieve configured leave types for tenant
+      responses:
+        '200':
+          description: List of leave types
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LeaveType'
+
+    post:
+      tags:
+        - Leave
+      summary: Create leave type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLeaveTypeRequest'
+      responses:
+        '201':
+          description: Leave type created
+
+  /leave/balances/{employeeId}:
+    get:
+      tags:
+        - Leave
+      summary: Get leave balances
+      description: Retrieve leave balances for employee
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Leave balances
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LeaveBalance'
+
+  /leave/apply:
+    post:
+      tags:
+        - Leave
+      summary: Apply for leave
+      description: Submit leave request (triggers UserTask creation for manager)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyLeaveRequest'
+      responses:
+        '201':
+          description: Leave request submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      leaveRequestId:
+                        type: string
+                        format: uuid
+                  message:
+                    type: string
+        '400':
+          description: Insufficient balance or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /leave/requests:
+    get:
+      tags:
+        - Leave
+      summary: Get leave requests
+      description: Retrieve leave requests with filtering
+      parameters:
+        - name: employeeId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Pending, Approved, Rejected]
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of leave requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LeaveRequest'
+
+  /leave/requests/{id}/approve:
+    put:
+      tags:
+        - Leave
+      summary: Approve leave request
+      description: Approve leave and mark UserTask as actioned
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comments:
+                  type: string
+      responses:
+        '200':
+          description: Leave approved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /leave/requests/{id}/reject:
+    put:
+      tags:
+        - Leave
+      summary: Reject leave request
+      description: Reject leave and mark UserTask as actioned
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - comments
+              properties:
+                comments:
+                  type: string
+      responses:
+        '200':
+          description: Leave rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  # ==================== WORKFLOW (ACTION CENTER) MODULE ====================
+  /tasks:
+    get:
+      tags:
+        - Workflow
+      summary: Get user tasks
+      description: Retrieve tasks assigned to current user (Action Center)
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Pending, Actioned, Expired]
+            default: Pending
+        - name: entityType
+          in: query
+          schema:
+            type: string
+            enum: [LEAVE, ATTENDANCE, ASSET]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [Low, Normal, High]
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/UserTask'
+                      totalCount:
+                        type: integer
+
+  /tasks/count:
+    get:
+      tags:
+        - Workflow
+      summary: Get pending tasks count
+      description: Get count of pending tasks for badge notification
+      responses:
+        '200':
+          description: Tasks count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      pendingCount:
+                        type: integer
+
+  /tasks/{id}/action:
+    put:
+      tags:
+        - Workflow
+      summary: Action a task
+      description: Mark task as actioned (used for custom actions)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action
+              properties:
+                action:
+                  type: string
+                  enum: [Approved, Rejected, Completed]
+                comments:
+                  type: string
+      responses:
+        '200':
+          description: Task actioned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  # ==================== PAYROLL MODULE ====================
+  /payroll/components:
+    get:
+      tags:
+        - Payroll
+      summary: Get salary components
+      description: Retrieve configured salary components (global + tenant)
+      responses:
+        '200':
+          description: List of salary components
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SalaryComponent'
+
+    post:
+      tags:
+        - Payroll
+      summary: Create salary component
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSalaryComponentRequest'
+      responses:
+        '201':
+          description: Component created
+
+  /payroll/structures:
+    get:
+      tags:
+        - Payroll
+      summary: Get salary structures
+      responses:
+        '200':
+          description: List of salary structures
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SalaryStructure'
+
+    post:
+      tags:
+        - Payroll
+      summary: Create salary structure
+      description: Define salary structure with component formulas (JSONB)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSalaryStructureRequest'
+      responses:
+        '201':
+          description: Structure created successfully
+
+  /payroll/run:
+    post:
+      tags:
+        - Payroll
+      summary: Run payroll
+      description: Process payroll for given month/year (async via Hangfire)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - month
+                - year
+              properties:
+                month:
+                  type: integer
+                  minimum: 1
+                  maximum: 12
+                year:
+                  type: integer
+      responses:
+        '202':
+          description: Payroll processing started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      payrollRunId:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        example: Processing
+
+  /payroll/runs:
+    get:
+      tags:
+        - Payroll
+      summary: Get payroll runs
+      description: Retrieve payroll run history
+      responses:
+        '200':
+          description: List of payroll runs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PayrollRun'
+
+  /payroll/payslips/{employeeId}:
+    get:
+      tags:
+        - Payroll
+      summary: Get employee payslips
+      description: Retrieve payslips for employee
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Payslip details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Payslip'
+
+  /payroll/payslips/{id}/download:
+    get:
+      tags:
+        - Payroll
+      summary: Download payslip PDF
+      description: Returns Azure Blob SAS URL for payslip PDF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '302':
+          description: Redirect to Azure Blob SAS URL
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== ASSETS MODULE ====================
+  /assets:
+    get:
+      tags:
+        - Assets
+      summary: Get all assets
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Available, Assigned, UnderMaintenance, Disposed]
+        - name: assetType
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of assets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Asset'
+
+    post:
+      tags:
+        - Assets
+      summary: Create asset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssetRequest'
+      responses:
+        '201':
+          description: Asset created
+
+  /assets/{id}/assign:
+    post:
+      tags:
+        - Assets
+      summary: Assign asset to employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignAssetRequest'
+      responses:
+        '200':
+          description: Asset assigned successfully
+
+  /assets/{id}/return:
+    post:
+      tags:
+        - Assets
+      summary: Return asset from employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnAssetRequest'
+      responses:
+        '200':
+          description: Asset returned successfully
+
+  /assets/assignments/{employeeId}:
+    get:
+      tags:
+        - Assets
+      summary: Get employee asset assignments
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of asset assignments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AssetAssignment'
+
+  # ==================== FORMS MODULE ====================
+  /forms/schema:
+    get:
+      tags:
+        - Forms
+      summary: Get form schema
+      description: Retrieve dynamic form schema for region-specific module
+      parameters:
+        - name: module
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ONBOARDING, LEAVE_APPLICATION, ASSET_REQUEST]
+      responses:
+        '200':
+          description: Form schema (JSONB)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/FormSchema'
+        '404':
+          description: Form template not found for region
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token with claims: tenant_id, user_id, role
+
+        Example header: Authorization: Bearer <token>
+
+  parameters:
+    PageNumber:
+      name: pageNumber
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - Invalid or missing JWT token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Bad Request - Validation errors
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    # ==================== COMMON SCHEMAS ====================
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errorCode:
+          type: string
+          description: i18n error code
+        errors:
+          type: object
+          additionalProperties:
+            type: string
+          description: Validation errors keyed by field name
+
+    # ==================== AUTH SCHEMAS ====================
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              description: JWT access token
+            refreshToken:
+              type: string
+            expiresAt:
+              type: string
+              format: date-time
+            user:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                email:
+                  type: string
+                name:
+                  type: string
+                role:
+                  type: string
+                  enum: [SA, TA, MGR, PA, EMP]
+                tenantId:
+                  type: string
+                  format: uuid
+                  nullable: true
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+
+    RefreshTokenResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+            expiresAt:
+              type: string
+              format: date-time
+
+    # ==================== PLATFORM SCHEMAS ====================
+    TenantOnboardRequest:
+      type: object
+      required:
+        - companyName
+        - subdomain
+        - regionCode
+        - adminEmail
+        - adminPassword
+      properties:
+        companyName:
+          type: string
+          maxLength: 255
+        subdomain:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+          maxLength: 100
+        regionCode:
+          type: string
+          enum: [UAE, USA, IND]
+        adminEmail:
+          type: string
+          format: email
+        adminPassword:
+          type: string
+          format: password
+          minLength: 8
+
+    TenantOnboardResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            tenantId:
+              type: string
+              format: uuid
+            subdomain:
+              type: string
+        message:
+          type: string
+
+    Region:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        currencyCode:
+          type: string
+        dateFormat:
+          type: string
+        direction:
+          type: string
+          enum: [ltr, rtl]
+        languageCode:
+          type: string
+        timezone:
+          type: string
+
+    # ==================== EMPLOYEE SCHEMAS ====================
+    EmployeeListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        employeeCode:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        departmentName:
+          type: string
+          nullable: true
+        designationTitle:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [Active, Notice, Exited]
+
+    EmployeeDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        employeeCode:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        joiningDate:
+          type: string
+          format: date
+        status:
+          type: string
+        currentJob:
+          type: object
+          nullable: true
+          properties:
+            departmentId:
+              type: string
+              format: uuid
+            departmentName:
+              type: string
+            designationId:
+              type: string
+              format: uuid
+            designationTitle:
+              type: string
+            reportingManagerId:
+              type: string
+              format: uuid
+              nullable: true
+            managerName:
+              type: string
+              nullable: true
+            locationId:
+              type: string
+              format: uuid
+              nullable: true
+            salaryTierId:
+              type: string
+              format: uuid
+              nullable: true
+        dynamicData:
+          type: object
+          additionalProperties: true
+          description: Region-specific fields (JSONB)
+
+    CreateEmployeeRequest:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - joiningDate
+        - departmentId
+        - designationId
+      properties:
+        employeeCode:
+          type: string
+          description: Auto-generated if not provided
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        joiningDate:
+          type: string
+          format: date
+        departmentId:
+          type: string
+          format: uuid
+        designationId:
+          type: string
+          format: uuid
+        reportingManagerId:
+          type: string
+          format: uuid
+          nullable: true
+        locationId:
+          type: string
+          format: uuid
+          nullable: true
+        salaryTierId:
+          type: string
+          format: uuid
+          nullable: true
+        dynamicData:
+          type: object
+          additionalProperties: true
+          description: Region-specific fields
+
+    UpdateEmployeeRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [Active, Notice, Exited]
+        dynamicData:
+          type: object
+          additionalProperties: true
+
+    PromoteEmployeeRequest:
+      type: object
+      required:
+        - effectiveDate
+        - changeType
+      properties:
+        departmentId:
+          type: string
+          format: uuid
+          nullable: true
+        designationId:
+          type: string
+          format: uuid
+          nullable: true
+        reportingManagerId:
+          type: string
+          format: uuid
+          nullable: true
+        locationId:
+          type: string
+          format: uuid
+          nullable: true
+        salaryTierId:
+          type: string
+          format: uuid
+          nullable: true
+        effectiveDate:
+          type: string
+          format: date
+        changeType:
+          type: string
+          enum: [PROMOTION, TRANSFER, DEMOTION, SALARY_REVISION]
+        changeReason:
+          type: string
+
+    JobHistoryRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        departmentName:
+          type: string
+        designationTitle:
+          type: string
+        managerName:
+          type: string
+          nullable: true
+        validFrom:
+          type: string
+          format: date
+        validTo:
+          type: string
+          format: date
+          nullable: true
+        changeType:
+          type: string
+        changeReason:
+          type: string
+          nullable: true
+
+    BulkImportStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [Queued, Processing, Completed, Failed]
+        totalRecords:
+          type: integer
+        processedRecords:
+          type: integer
+        failedRecords:
+          type: integer
+        errorFileUrl:
+          type: string
+          nullable: true
+          description: SAS URL to download error CSV
+
+    # ==================== DEPARTMENT SCHEMAS ====================
+    Department:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        parentDepartmentId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateDepartmentRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        parentDepartmentId:
+          type: string
+          format: uuid
+          nullable: true
+
+    # ==================== DESIGNATION SCHEMAS ====================
+    Designation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        level:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateDesignationRequest:
+      type: object
+      required:
+        - title
+        - level
+      properties:
+        title:
+          type: string
+        level:
+          type: integer
+
+    # ==================== LOCATION SCHEMAS ====================
+    Location:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        address:
+          type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        radiusMeters:
+          type: integer
+          description: Geofence radius
+
+    CreateLocationRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        radiusMeters:
+          type: integer
+          default: 100
+
+    # ==================== SHIFT SCHEMAS ====================
+    ShiftMaster:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        startTime:
+          type: string
+          format: time
+          example: "09:00:00"
+        endTime:
+          type: string
+          format: time
+          example: "18:00:00"
+        gracePeriodMins:
+          type: integer
+        totalHours:
+          type: number
+          format: float
+        isActive:
+          type: boolean
+
+    CreateShiftRequest:
+      type: object
+      required:
+        - name
+        - code
+        - startTime
+        - endTime
+        - totalHours
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        startTime:
+          type: string
+          format: time
+        endTime:
+          type: string
+          format: time
+        gracePeriodMins:
+          type: integer
+          default: 15
+        totalHours:
+          type: number
+          format: float
+
+    # ==================== ROSTER SCHEMAS ====================
+    AssignShiftRequest:
+      type: object
+      required:
+        - employeeIds
+        - shiftId
+        - effectiveDate
+      properties:
+        employeeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Array of employee IDs for bulk shift assignment
+        shiftId:
+          type: string
+          format: uuid
+        effectiveDate:
+          type: string
+          format: date
+
+    RosterEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        employeeId:
+          type: string
+          format: uuid
+        shiftId:
+          type: string
+          format: uuid
+        shiftName:
+          type: string
+        effectiveDate:
+          type: string
+          format: date
+
+    # ==================== ATTENDANCE SCHEMAS ====================
+    ClockInRequest:
+      type: object
+      required:
+        - employeeId
+        - latitude
+        - longitude
+      properties:
+        employeeId:
+          type: string
+          format: uuid
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        ipAddress:
+          type: string
+          description: Auto-captured from request
+
+    ClockOutRequest:
+      type: object
+      required:
+        - employeeId
+      properties:
+        employeeId:
+          type: string
+          format: uuid
+        ipAddress:
+          type: string
+
+    AttendanceLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        employeeId:
+          type: string
+          format: uuid
+        employeeName:
+          type: string
+        date:
+          type: string
+          format: date
+        clockIn:
+          type: string
+          format: date-time
+          nullable: true
+        clockOut:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [Present, Absent, HalfDay, OnLeave]
+        isLate:
+          type: boolean
+        lateByMinutes:
+          type: integer
+        isRegularized:
+          type: boolean
+        regularizationReason:
+          type: string
+          nullable: true
+
+    BulkApproveAttendanceRequest:
+      type: object
+      required:
+        - employeeIds
+        - month
+        - year
+      properties:
+        employeeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+        year:
+          type: integer
+
+    # ==================== LEAVE SCHEMAS ====================
+    LeaveType:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        maxDaysPerYear:
+          type: number
+          format: float
+        isCarryForward:
+          type: boolean
+        requiresApproval:
+          type: boolean
+
+    CreateLeaveTypeRequest:
+      type: object
+      required:
+        - name
+        - code
+        - maxDaysPerYear
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        maxDaysPerYear:
+          type: number
+          format: float
+        isCarryForward:
+          type: boolean
+          default: false
+        requiresApproval:
+          type: boolean
+          default: true
+
+    LeaveBalance:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        leaveTypeName:
+          type: string
+        leaveTypeCode:
+          type: string
+        year:
+          type: integer
+        accrued:
+          type: number
+          format: float
+        used:
+          type: number
+          format: float
+        balance:
+          type: number
+          format: float
+
+    ApplyLeaveRequest:
+      type: object
+      required:
+        - employeeId
+        - leaveTypeId
+        - startDate
+        - endDate
+        - daysCount
+      properties:
+        employeeId:
+          type: string
+          format: uuid
+        leaveTypeId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        daysCount:
+          type: number
+          format: float
+        reason:
+          type: string
+
+    LeaveRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        employeeId:
+          type: string
+          format: uuid
+        employeeName:
+          type: string
+        leaveTypeId:
+          type: string
+          format: uuid
+        leaveTypeName:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        daysCount:
+          type: number
+          format: float
+        reason:
+          type: string
+        status:
+          type: string
+          enum: [Pending, Approved, Rejected]
+        approvedBy:
+          type: string
+          format: uuid
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        approverComments:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    # ==================== WORKFLOW SCHEMAS ====================
+    UserTask:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        entityType:
+          type: string
+          enum: [LEAVE, ATTENDANCE, ASSET]
+        entityId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [Pending, Actioned, Expired]
+        actionUrl:
+          type: string
+        priority:
+          type: string
+          enum: [Low, Normal, High]
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    # ==================== PAYROLL SCHEMAS ====================
+    SalaryComponent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        type:
+          type: string
+          enum: [Earning, Deduction]
+        isTaxable:
+          type: boolean
+
+    CreateSalaryComponentRequest:
+      type: object
+      required:
+        - name
+        - code
+        - type
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        type:
+          type: string
+          enum: [Earning, Deduction]
+        isTaxable:
+          type: boolean
+          default: false
+
+    SalaryStructure:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        componentsJson:
+          type: array
+          items:
+            type: object
+            properties:
+              componentId:
+                type: string
+                format: uuid
+              calculation:
+                type: string
+                enum: [FIXED, PERCENT]
+              value:
+                type: number
+                format: float
+              base:
+                type: string
+                nullable: true
+                description: Component code to calculate from (e.g. "BASIC")
+
+    CreateSalaryStructureRequest:
+      type: object
+      required:
+        - name
+        - componentsJson
+      properties:
+        name:
+          type: string
+        componentsJson:
+          type: array
+          items:
+            type: object
+            required:
+              - componentId
+              - calculation
+              - value
+            properties:
+              componentId:
+                type: string
+                format: uuid
+              calculation:
+                type: string
+                enum: [FIXED, PERCENT]
+              value:
+                type: number
+                format: float
+              base:
+                type: string
+                nullable: true
+
+    PayrollRun:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        month:
+          type: integer
+        year:
+          type: integer
+        status:
+          type: string
+          enum: [Draft, Locked, Published]
+        s3PathPdfBundle:
+          type: string
+          nullable: true
+        processedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    Payslip:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        payrollRunId:
+          type: string
+          format: uuid
+        employeeId:
+          type: string
+          format: uuid
+        workingDays:
+          type: integer
+        presentDays:
+          type: integer
+        grossEarnings:
+          type: number
+          format: float
+        totalDeductions:
+          type: number
+          format: float
+        netPay:
+          type: number
+          format: float
+        breakdownJson:
+          type: object
+          properties:
+            earnings:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  amount:
+                    type: number
+                    format: float
+            deductions:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  amount:
+                    type: number
+                    format: float
+        pdfPath:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    # ==================== ASSET SCHEMAS ====================
+    Asset:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        assetCode:
+          type: string
+        assetType:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        serialNumber:
+          type: string
+        purchaseDate:
+          type: string
+          format: date
+        purchasePrice:
+          type: number
+          format: float
+        status:
+          type: string
+          enum: [Available, Assigned, UnderMaintenance, Disposed]
+
+    CreateAssetRequest:
+      type: object
+      required:
+        - assetCode
+        - assetType
+      properties:
+        assetCode:
+          type: string
+        assetType:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        serialNumber:
+          type: string
+        purchaseDate:
+          type: string
+          format: date
+        purchasePrice:
+          type: number
+          format: float
+
+    AssignAssetRequest:
+      type: object
+      required:
+        - employeeId
+        - assignedDate
+        - assignedCondition
+      properties:
+        employeeId:
+          type: string
+          format: uuid
+        assignedDate:
+          type: string
+          format: date
+        assignedCondition:
+          type: string
+
+    ReturnAssetRequest:
+      type: object
+      required:
+        - returnedDate
+        - returnedCondition
+      properties:
+        returnedDate:
+          type: string
+          format: date
+        returnedCondition:
+          type: string
+        returnNotes:
+          type: string
+
+    AssetAssignment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        assetId:
+          type: string
+          format: uuid
+        assetCode:
+          type: string
+        assetType:
+          type: string
+        employeeId:
+          type: string
+          format: uuid
+        assignedDate:
+          type: string
+          format: date
+        returnedDate:
+          type: string
+          format: date
+          nullable: true
+        assignedCondition:
+          type: string
+        returnedCondition:
+          type: string
+          nullable: true
+        returnNotes:
+          type: string
+          nullable: true
+
+    # ==================== FORM SCHEMAS ====================
+    FormSchema:
+      type: object
+      properties:
+        fields:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+              type:
+                type: string
+                enum: [text, number, date, dropdown, checkbox, textarea]
+              required:
+                type: boolean
+              regex:
+                type: string
+                nullable: true
+              errorMessage:
+                type: string
+                nullable: true
+              options:
+                type: array
+                items:
+                  type: string
+                nullable: true

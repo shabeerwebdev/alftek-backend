@@ -1,0 +1,87 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README.md
+SYSTEM_DESIGN.md
+docs/
+
+# IDE and Editor files
+.vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build outputs
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# NuGet packages
+**/*.nupkg
+**/*.snupkg
+**/packages/
+.nuget/
+
+# Test results
+**/TestResults/
+**/*.trx
+**/*.coverage
+
+# User-specific files
+**/*.suo
+**/*.user
+**/*.userosscache
+**/*.sln.docstates
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+**/*.log
+logs/
+**/logs/
+
+# Temporary files
+**/tmp/
+**/temp/
+
+# Docker files (no need to copy into container)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Frontend (if present in same repo)
+**/node_modules/
+**/dist/
+**/.next/
+**/build/
+
+# Database files
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# Azure and Cloud
+**/*.pubxml
+**/*.publishsettings
+
+# Sensitive data
+**/secrets/
+**/*.pfx
+**/*.key
+**/*.pem
+
+# Miscellaneous
+**/.cache/
+**/coverage/
+**/.nyc_output/

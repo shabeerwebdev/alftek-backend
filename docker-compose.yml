@@ -1,0 +1,164 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: alftekpro-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-alftekpro_hrms}
+      POSTGRES_USER: ${POSTGRES_USER:-hrms_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hrms_dev_pass_2024}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hrms_user} -d ${POSTGRES_DB:-alftekpro_hrms}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alftekpro-network
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: alftekpro-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_dev_pass_2024}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alftekpro-network
+    restart: unless-stopped
+
+  # API Service (.NET 8 Web API)
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: alftekpro-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=${POSTGRES_DB:-alftekpro_hrms};Username=${POSTGRES_USER:-hrms_user};Password=${POSTGRES_PASSWORD:-hrms_dev_pass_2024};
+      - Redis__ConnectionString=redis:6379,password=${REDIS_PASSWORD:-redis_dev_pass_2024}
+      - Redis__InstanceName="alftekpro:"
+      - JWT__Secret=${JWT_SECRET:-your-super-secret-jwt-key-min-32-chars-change-in-production}
+      - JWT__Issuer=AlfTekPro.HRMS
+      - JWT__Audience=AlfTekPro.HRMS.Client
+      - JWT__ExpiryMinutes=60
+      - AzureStorage__ConnectionString=${AZURE_STORAGE_CONNECTION:-UseDevelopmentStorage=true}
+      - AzureStorage__ContainerName=hrms-storage
+      - Hangfire__DashboardEnabled=true
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Microsoft.AspNetCore=Warning
+    ports:
+      - "${API_PORT:-5001}:80"
+    volumes:
+      - ./backend:/app:delegated
+      - /app/bin
+      - /app/obj
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - alftekpro-network
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+  # Worker Service (Hangfire Background Jobs)
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.Worker
+      target: development
+    container_name: alftekpro-worker
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=${POSTGRES_DB:-alftekpro_hrms};Username=${POSTGRES_USER:-hrms_user};Password=${POSTGRES_PASSWORD:-hrms_dev_pass_2024};
+      - Redis__ConnectionString=redis:6379,password=${REDIS_PASSWORD:-redis_dev_pass_2024}
+      - Redis__InstanceName="alftekpro:"
+      - AzureStorage__ConnectionString=${AZURE_STORAGE_CONNECTION:-UseDevelopmentStorage=true}
+      - AzureStorage__ContainerName=hrms-storage
+      - Logging__LogLevel__Default=Information
+      - Logging__LogLevel__Hangfire=Information
+    volumes:
+      - ./backend:/app:delegated
+      - /app/bin
+      - /app/obj
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - alftekpro-network
+    restart: unless-stopped
+
+  # pgAdmin (Optional - for database management UI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: alftekpro-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@alftekpro.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - alftekpro-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+  # Azurite (Local Azure Storage Emulator)
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: alftekpro-azurite
+    command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0
+    ports:
+      - "10000:10000"  # Blob service
+      - "10001:10001"  # Queue service
+      - "10002:10002"  # Table service
+    volumes:
+      - azurite_data:/data
+    networks:
+      - alftekpro-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+networks:
+  alftekpro-network:
+    driver: bridge
+    name: alftekpro-network
+
+volumes:
+  postgres_data:
+    name: alftekpro-postgres-data
+  redis_data:
+    name: alftekpro-redis-data
+  pgadmin_data:
+    name: alftekpro-pgadmin-data
+  azurite_data:
+    name: alftekpro-azurite-data

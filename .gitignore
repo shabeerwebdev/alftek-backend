@@ -1,0 +1,258 @@
+# ==================================================
+# AlfTekPro HRMS - Git Ignore Configuration
+# ==================================================
+
+# --------------------------------------------------
+# .NET Core
+# --------------------------------------------------
+bin/
+obj/
+out/
+publish/
+
+# NuGet packages
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Test results
+TestResults/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+.nyc_output/
+
+# --------------------------------------------------
+# Visual Studio / Rider
+# --------------------------------------------------
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.opendb
+*.VC.db
+*.VC.VC.opendb
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# --------------------------------------------------
+# Environment & Secrets
+# --------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.env
+
+# Azure publish profiles
+*.pubxml
+*.publishsettings
+
+# Certificates & Keys
+*.pfx
+*.p12
+*.key
+*.pem
+*.crt
+*.cer
+secrets/
+appsettings.*.json
+!appsettings.json
+!appsettings.Development.json
+
+# --------------------------------------------------
+# Docker
+# --------------------------------------------------
+docker-compose.override.yml
+
+# --------------------------------------------------
+# Database
+# --------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# --------------------------------------------------
+# Logs
+# --------------------------------------------------
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# --------------------------------------------------
+# OS Files
+# --------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# --------------------------------------------------
+# Node.js (if frontend is in same repo)
+# --------------------------------------------------
+node_modules/
+npm-debug.log
+yarn-error.log
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# --------------------------------------------------
+# Temporary Files
+# --------------------------------------------------
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.cache/
+tmp/
+temp/
+
+# --------------------------------------------------
+# IDE Specific
+# --------------------------------------------------
+*.sublime-workspace
+*.sublime-project
+
+# --------------------------------------------------
+# Documentation Build
+# --------------------------------------------------
+_site/
+.sass-cache/
+.jekyll-cache/
+.jekyll-metadata
+
+# --------------------------------------------------
+# Backup Files
+# --------------------------------------------------
+*.bak
+*.backup
+*.orig
+
+# --------------------------------------------------
+# Package Managers
+# --------------------------------------------------
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# --------------------------------------------------
+# Entity Framework
+# --------------------------------------------------
+*.dbmdl
+*.jfm
+
+# --------------------------------------------------
+# Azure Functions
+# --------------------------------------------------
+local.settings.json
+__blobstorage__
+__queuestorage__
+__azurite_db*__.json
+
+# --------------------------------------------------
+# Coverage Reports
+# --------------------------------------------------
+*.coverage
+*.coveragexml
+coverage.json
+htmlcov/
+
+# --------------------------------------------------
+# Benchmark Results
+# --------------------------------------------------
+BenchmarkDotNet.Artifacts/
+
+# --------------------------------------------------
+# Local History (VS Code)
+# --------------------------------------------------
+.history/
+
+# --------------------------------------------------
+# JetBrains Rider
+# --------------------------------------------------
+.idea/
+*.sln.iml
+
+# --------------------------------------------------
+# StyleCop
+# --------------------------------------------------
+StyleCopReport.xml
+
+# --------------------------------------------------
+# NCrunch
+# --------------------------------------------------
+_NCrunch_*
+.*crunch*.local.xml
+nCrunchTemp_*
+
+# --------------------------------------------------
+# MinGW
+# --------------------------------------------------
+*.exe
+*.dll
+*.so
+*.dylib
+
+# --------------------------------------------------
+# Terraform (if used)
+# --------------------------------------------------
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# --------------------------------------------------
+# Claude AI
+# --------------------------------------------------
+.claude/
+*.jsonl
+!.claude/plans/*.md
