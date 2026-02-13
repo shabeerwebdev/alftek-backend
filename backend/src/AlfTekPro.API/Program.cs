@@ -81,6 +81,8 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    options.MapInboundClaims = false; // Prevent remapping "role" → ClaimTypes.Role
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -90,7 +92,8 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = jwtIssuer,
         ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
-        ClockSkew = TimeSpan.Zero // Remove default 5 minute tolerance
+        ClockSkew = TimeSpan.Zero, // Remove default 5 minute tolerance
+        RoleClaimType = "role" // Map our custom "role" claim for [Authorize(Roles=...)]
     };
 
     options.Events = new JwtBearerEvents

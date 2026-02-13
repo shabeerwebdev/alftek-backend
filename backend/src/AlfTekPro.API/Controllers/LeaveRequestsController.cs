@@ -97,7 +97,7 @@ public class LeaveRequestsController : ControllerBase
     /// </summary>
     /// <returns>List of pending leave requests</returns>
     [HttpGet("pending")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<List<LeaveRequestResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPendingLeaveRequests()
     {
@@ -162,7 +162,7 @@ public class LeaveRequestsController : ControllerBase
     /// <param name="approvalRequest">Approval decision and comments</param>
     /// <returns>Updated leave request</returns>
     [HttpPost("{id:guid}/process")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<LeaveRequestResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
@@ -171,7 +171,7 @@ public class LeaveRequestsController : ControllerBase
         try
         {
             // Get approver ID from JWT claims
-            var approverIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var approverIdClaim = User.FindFirst("user_id")?.Value ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(approverIdClaim) || !Guid.TryParse(approverIdClaim, out var approverId))
             {
                 return Unauthorized(ApiResponse<object>.ErrorResult("Invalid user authentication"));
@@ -248,7 +248,7 @@ public class LeaveRequestsController : ControllerBase
     /// <param name="id">Leave request ID</param>
     /// <returns>Success message</returns>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin")]
+    [Authorize(Roles = "SA,TA")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]

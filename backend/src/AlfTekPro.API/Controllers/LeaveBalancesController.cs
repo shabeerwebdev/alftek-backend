@@ -120,7 +120,7 @@ public class LeaveBalancesController : ControllerBase
     /// <param name="request">Leave balance details</param>
     /// <returns>Created leave balance</returns>
     [HttpPost]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<LeaveBalanceResponse>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateLeaveBalance([FromBody] LeaveBalanceRequest request)
@@ -156,7 +156,7 @@ public class LeaveBalancesController : ControllerBase
     /// <param name="request">Updated leave balance details</param>
     /// <returns>Updated leave balance</returns>
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<LeaveBalanceResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
@@ -195,7 +195,7 @@ public class LeaveBalancesController : ControllerBase
     /// <param name="year">Year to initialize balances for</param>
     /// <returns>Number of balances created</returns>
     [HttpPost("initialize/{year:int}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin")]
+    [Authorize(Roles = "SA,TA")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> InitializeBalancesForYear(int year)
@@ -227,7 +227,7 @@ public class LeaveBalancesController : ControllerBase
     /// <param name="id">Leave balance ID</param>
     /// <returns>Success message</returns>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin")]
+    [Authorize(Roles = "SA,TA")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]

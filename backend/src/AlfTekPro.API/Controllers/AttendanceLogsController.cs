@@ -206,7 +206,7 @@ public class AttendanceLogsController : ControllerBase
     /// <param name="request">Regularization request with reason</param>
     /// <returns>Updated attendance log</returns>
     [HttpPost("{id:guid}/regularize")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<AttendanceLogResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
@@ -245,7 +245,7 @@ public class AttendanceLogsController : ControllerBase
     /// <param name="id">Attendance log ID</param>
     /// <returns>Success message</returns>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin")]
+    [Authorize(Roles = "SA,TA")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteAttendanceLog(Guid id)

@@ -153,7 +153,7 @@ public class SalaryComponentsController : ControllerBase
     /// <param name="request">Component details</param>
     /// <returns>Created component</returns>
     [HttpPost]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin")]
+    [Authorize(Roles = "SA,TA")]
     [ProducesResponseType(typeof(ApiResponse<SalaryComponentResponse>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateComponent([FromBody] SalaryComponentRequest request)
@@ -189,7 +189,7 @@ public class SalaryComponentsController : ControllerBase
     /// <param name="request">Updated component details</param>
     /// <returns>Updated component</returns>
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin")]
+    [Authorize(Roles = "SA,TA")]
     [ProducesResponseType(typeof(ApiResponse<SalaryComponentResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
@@ -228,7 +228,7 @@ public class SalaryComponentsController : ControllerBase
     /// <param name="id">Component ID</param>
     /// <returns>Success message</returns>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin")]
+    [Authorize(Roles = "SA,TA")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]

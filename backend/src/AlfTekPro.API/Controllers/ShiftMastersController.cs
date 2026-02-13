@@ -88,7 +88,7 @@ public class ShiftMastersController : ControllerBase
     /// <param name="request">Shift master details</param>
     /// <returns>Created shift master</returns>
     [HttpPost]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<ShiftMasterResponse>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateShiftMaster([FromBody] ShiftMasterRequest request)
@@ -124,7 +124,7 @@ public class ShiftMastersController : ControllerBase
     /// <param name="request">Updated shift master details</param>
     /// <returns>Updated shift master</returns>
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<ShiftMasterResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
@@ -163,7 +163,7 @@ public class ShiftMastersController : ControllerBase
     /// <param name="id">Shift master ID</param>
     /// <returns>Success message</returns>
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin")]
+    [Authorize(Roles = "SA,TA")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]

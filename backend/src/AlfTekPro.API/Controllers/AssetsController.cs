@@ -66,7 +66,7 @@ public class AssetsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<AssetResponse>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateAsset([FromBody] AssetRequest request)
@@ -93,7 +93,7 @@ public class AssetsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<AssetResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateAsset(Guid id, [FromBody] AssetRequest request)
@@ -121,7 +121,7 @@ public class AssetsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin")]
+    [Authorize(Roles = "SA,TA")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> DeleteAsset(Guid id)
@@ -149,7 +149,7 @@ public class AssetsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/assign")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<AssetAssignmentResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> AssignAsset(Guid id, [FromBody] AssetAssignmentRequest request)
@@ -178,7 +178,7 @@ public class AssetsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/return")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<AssetAssignmentResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ReturnAsset(Guid id, [FromBody] AssetReturnRequest request)

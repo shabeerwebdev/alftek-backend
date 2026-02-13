@@ -108,7 +108,7 @@ public class TenantsController : ControllerBase
     /// <param name="tenantId">Tenant ID</param>
     /// <returns>Tenant details</returns>
     [HttpGet("{tenantId:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin")]
+    [Authorize(Roles = "SA,TA")]
     [ProducesResponseType(typeof(ApiResponse<TenantOnboardingResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]

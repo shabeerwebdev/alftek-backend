@@ -32,7 +32,7 @@ public class PayslipsController : ControllerBase
     /// <param name="runId">Payroll run ID</param>
     /// <returns>List of payslips</returns>
     [HttpGet("run/{runId:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<List<PayslipResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPayslipsByRun(Guid runId)
     {
@@ -59,7 +59,7 @@ public class PayslipsController : ControllerBase
     /// <param name="year">Optional year filter</param>
     /// <returns>List of payslips</returns>
     [HttpGet("employee/{employeeId:guid}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Manager")]
+    [Authorize(Roles = "SA,TA,MGR")]
     [ProducesResponseType(typeof(ApiResponse<List<PayslipResponse>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPayslipsByEmployee(Guid employeeId, [FromQuery] int? year = null)
     {

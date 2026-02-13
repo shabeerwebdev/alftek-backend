@@ -93,7 +93,7 @@ public class FormTemplatesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "SuperAdmin")]
+    [Authorize(Roles = "SA")]
     [ProducesResponseType(typeof(ApiResponse<FormTemplateResponse>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] FormTemplateRequest request)
@@ -121,7 +121,7 @@ public class FormTemplatesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin")]
+    [Authorize(Roles = "SA")]
     [ProducesResponseType(typeof(ApiResponse<FormTemplateResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Update(Guid id, [FromBody] FormTemplateRequest request)
@@ -150,7 +150,7 @@ public class FormTemplatesController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "SuperAdmin")]
+    [Authorize(Roles = "SA")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id)

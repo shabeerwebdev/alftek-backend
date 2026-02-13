@@ -284,7 +284,15 @@ public static class DataSeederExtensions
             var logger = services.GetRequiredService<ILogger<DataSeeder>>();
 
             // Ensure database is created and migrations are applied
-            await context.Database.MigrateAsync();
+            try
+            {
+                await context.Database.MigrateAsync();
+            }
+            catch (InvalidOperationException)
+            {
+                // InMemory provider doesn't support migrations — fall back to EnsureCreated
+                await context.Database.EnsureCreatedAsync();
+            }
 
             var seeder = new DataSeeder(context, logger);
             await seeder.SeedAsync(seedDemoData);
