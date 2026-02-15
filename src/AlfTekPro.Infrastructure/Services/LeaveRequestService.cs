@@ -114,8 +114,9 @@ public class LeaveRequestService : ILeaveRequestService
         }
 
         // Calculate number of days
-        var startDate = request.StartDate.Date;
-        var endDate = request.EndDate.Date;
+        // PostgreSQL timestamptz requires UTC - explicitly set Kind after .Date (which resets to Unspecified)
+        var startDate = DateTime.SpecifyKind(request.StartDate.Date, DateTimeKind.Utc);
+        var endDate = DateTime.SpecifyKind(request.EndDate.Date, DateTimeKind.Utc);
         var daysCount = CalculateWorkingDays(startDate, endDate);
 
         // Check for overlapping leave requests
@@ -123,7 +124,7 @@ public class LeaveRequestService : ILeaveRequestService
             .AnyAsync(lr =>
                 lr.EmployeeId == request.EmployeeId &&
                 lr.Status != LeaveRequestStatus.Rejected &&
-                ((lr.StartDate.Date <= endDate && lr.EndDate.Date >= startDate)),
+                ((lr.StartDate <= endDate && lr.EndDate >= startDate)),
                 cancellationToken);
 
         if (hasOverlap)

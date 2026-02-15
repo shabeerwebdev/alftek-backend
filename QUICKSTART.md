@@ -23,7 +23,7 @@ cp .env.example .env
 
 ## Step 2: Start the Application
 
-### Option A: Using Make (Recommended)
+### Option A: Using Make (Linux/macOS or Windows with Make installed)
 
 ```bash
 # Start all services
@@ -31,6 +31,18 @@ make up
 
 # Start with tools (pgAdmin, Azurite)
 make up-tools
+```
+
+### Option B: Using Docker Compose (Recommended for Windows)
+
+On Windows, `make` might not be installed by default. You can use Docker Compose directly:
+
+```powershell
+# Start core services
+docker-compose up -d
+
+# Or with tools (pgAdmin, Azurite)
+docker-compose --profile tools up -d
 ```
 
 ### Option B: Using Docker Compose Directly
@@ -47,9 +59,6 @@ docker-compose --profile tools up -d
 
 ```bash
 # Check service status
-make status
-
-# Or
 docker-compose ps
 ```
 
@@ -79,14 +88,20 @@ The API is now running and ready for development.
 ### 1. Run Database Migrations
 
 ```bash
-# Run migrations (when .NET projects are created)
+# Using Docker (Recommended)
+docker exec -it alftekpro-api dotnet ef database update
+
+# Or using Make (if installed)
 make migrate
 ```
 
 ### 2. Seed Initial Data
 
 ```bash
-# Seed database with regions, sample tenants, etc.
+# Using Docker (Recommended)
+docker exec -it alftekpro-api dotnet run --project /app/src/AlfTekPro.API -- seed
+
+# Or using Make (if installed)
 make seed
 ```
 
@@ -103,13 +118,13 @@ Try the following endpoints:
 
 ```bash
 # View all logs
-make logs
+docker-compose logs -f
 
 # View API logs only
-make logs-api
+docker-compose logs -f api
 
 # View Worker logs
-make logs-worker
+docker-compose logs -f worker
 ```
 
 ## 🛠️ Common Commands

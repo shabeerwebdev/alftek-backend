@@ -45,7 +45,7 @@ services:
   # API Service (.NET 8 Web API)
   api:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
       target: development
     container_name: alftekpro-api
@@ -67,7 +67,7 @@ services:
     ports:
       - "${API_PORT:-5001}:80"
     volumes:
-      - ./backend:/app:delegated
+      - .:/app:delegated
       - /app/bin
       - /app/obj
     depends_on:
@@ -84,7 +84,7 @@ services:
   # Worker Service (Hangfire Background Jobs)
   worker:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile.Worker
       target: development
     container_name: alftekpro-worker
@@ -98,7 +98,7 @@ services:
       - Logging__LogLevel__Default=Information
       - Logging__LogLevel__Hangfire=Information
     volumes:
-      - ./backend:/app:delegated
+      - .:/app:delegated
       - /app/bin
       - /app/obj
     depends_on:

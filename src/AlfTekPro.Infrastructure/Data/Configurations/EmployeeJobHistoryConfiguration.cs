@@ -62,7 +62,6 @@ public class EmployeeJobHistoryConfiguration : IEntityTypeConfiguration<Employee
             .HasColumnName("change_reason");
 
         builder.Property(jh => jh.CreatedBy)
-            .IsRequired()
             .HasColumnName("created_by");
 
         builder.Property(jh => jh.CreatedAt)

@@ -80,7 +80,7 @@ docker exec -i alftekpro-postgres psql -U hrms_user -d alftekpro_hrms -c "\dt"
 # Start API
 cd src/AlfTekPro.API
 dotnet run
-# Should start on http://localhost:5000
+# Should start on http://localhost:5001
 ```
 
 ---

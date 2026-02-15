@@ -3,12 +3,19 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using AlfTekPro.Infrastructure.Data.Contexts;
+using Testcontainers.PostgreSql;
+using Xunit;
 
 namespace AlfTekPro.IntegrationTests.Infrastructure;
 
-public class HrmsWebApplicationFactory : WebApplicationFactory<Program>
+public class HrmsWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly string _dbName = $"HrmsTest_{Guid.NewGuid():N}";
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
+        .WithImage("postgres:15-alpine")
+        .WithDatabase("alftekpro_test")
+        .WithUsername("test_user")
+        .WithPassword("test_pass")
+        .Build();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -28,10 +35,10 @@ public class HrmsWebApplicationFactory : WebApplicationFactory<Program>
             if (dbContextDescriptor != null)
                 services.Remove(dbContextDescriptor);
 
-            // Add InMemory database
+            // Add real PostgreSQL via Testcontainers
             services.AddDbContext<HrmsDbContext>(options =>
             {
-                options.UseInMemoryDatabase(_dbName);
+                options.UseNpgsql(_postgres.GetConnectionString());
             });
         });
 
@@ -40,5 +47,15 @@ public class HrmsWebApplicationFactory : WebApplicationFactory<Program>
         builder.UseSetting("JWT:Issuer", TestAuthHelper.JwtIssuer);
         builder.UseSetting("JWT:Audience", TestAuthHelper.JwtAudience);
         builder.UseSetting("JWT:ExpiryMinutes", "60");
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _postgres.StartAsync();
+    }
+
+    async Task IAsyncLifetime.DisposeAsync()
+    {
+        await _postgres.DisposeAsync();
     }
 }

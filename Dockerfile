@@ -53,7 +53,7 @@ COPY . .
 WORKDIR /app/src/AlfTekPro.API
 
 # Development entry point with hot reload enabled
-ENTRYPOINT ["dotnet", "watch", "run", "--no-restore", "--urls", "http://+:80"]
+ENTRYPOINT ["dotnet", "watch", "run", "--no-restore", "--urls", "http://+:80", "--no-launch-profile"]
 
 # --------------------------------------------------
 # Stage 3: Build Stage

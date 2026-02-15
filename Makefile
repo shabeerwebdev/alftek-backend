@@ -230,7 +230,7 @@ clean-all: ## Remove all containers, images, and volumes (⚠️  NUCLEAR OPTION
 # --------------------------------------------------
 format: ## Format code (requires .NET SDK)
 	@echo "$(BLUE)Formatting code...$(NC)"
-	dotnet format backend/
+	dotnet format
 
 watch-api: ## Watch API logs with auto-reload
 	docker-compose logs -f api

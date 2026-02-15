@@ -2,7 +2,7 @@
 # Comprehensive Core HR Testing Script
 # Tests: Auth → Tenant Onboarding → Regions → Departments → Designations → Locations → Employees
 
-$BaseUrl = "http://localhost:5000"
+$BaseUrl = "http://localhost:5001"
 $ErrorActionPreference = "Continue"
 
 Write-Host "===========================================" -ForegroundColor Cyan

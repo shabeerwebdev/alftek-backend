@@ -14,15 +14,23 @@ docker-compose up -d postgres
 dotnet tool install --global dotnet-ef
 ```
 
-## 3️⃣ Create Migration (from backend/ directory)
+## 3️⃣ Create Migration
 
 ```bash
-dotnet ef migrations add InitialCreate --project src/AlfTekPro.Infrastructure --startup-project src/AlfTekPro.API --output-dir Data/Migrations
+# Using Docker (from root directory)
+docker exec -it alftekpro-api dotnet ef migrations add MigrationName --project src/AlfTekPro.Infrastructure --startup-project src/AlfTekPro.API --output-dir Data/Migrations
+
+# Local (from backend/ directory)
+dotnet ef migrations add MigrationName --project src/AlfTekPro.Infrastructure --startup-project src/AlfTekPro.API --output-dir Data/Migrations
 ```
 
 ## 4️⃣ Apply Migration
 
 ```bash
+# Using Docker (from root directory)
+docker exec -it alftekpro-api dotnet ef database update
+
+# Local (from backend/ directory)
 dotnet ef database update --project src/AlfTekPro.Infrastructure --startup-project src/AlfTekPro.API
 ```
 

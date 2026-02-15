@@ -62,9 +62,9 @@ public class EmployeeJobHistory : BaseTenantEntity
     public string? ChangeReason { get; set; }
 
     /// <summary>
-    /// User who created this job history record
+    /// User who created this job history record (nullable - requires proper auth context)
     /// </summary>
-    public Guid CreatedBy { get; set; }
+    public Guid? CreatedBy { get; set; }
 
     // Navigation properties
 
@@ -101,5 +101,5 @@ public class EmployeeJobHistory : BaseTenantEntity
     /// <summary>
     /// User who created this record
     /// </summary>
-    public virtual Platform.User Creator { get; set; } = null!;
+    public virtual Platform.User? Creator { get; set; }
 }

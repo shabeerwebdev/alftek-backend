@@ -198,7 +198,7 @@ public class EmployeeService : IEmployeeService
             ValidFrom = employee.JoiningDate,
             ChangeType = "NEW_JOINING",
             ChangeReason = "Initial onboarding",
-            CreatedBy = Guid.Empty // TODO: Get from current user context
+            CreatedBy = null // TODO: Get from current user context (HttpContext)
         };
 
         _context.EmployeeJobHistories.Add(jobHistory);
@@ -330,7 +330,7 @@ public class EmployeeService : IEmployeeService
                 ReportingManagerId = request.ReportingManagerId,
                 ValidFrom = now,
                 ChangeType = changeType,
-                CreatedBy = Guid.Empty // TODO: Get from current user context
+                CreatedBy = null // TODO: Get from current user context (HttpContext)
             };
 
             _context.EmployeeJobHistories.Add(newHistory);

@@ -8,7 +8,7 @@ Complete testing guide for all Core HR modules.
 
 ✅ PostgreSQL running (`docker-compose up -d postgres`)
 ✅ Database migrated and seeded (3 regions)
-✅ API running (`dotnet run --project src/AlfTekPro.API`)
+✅ API running (`docker-compose up -d api` or `dotnet run`)
 
 ---
 
@@ -44,6 +44,15 @@ cd c:\Users\Admin\Documents\alftekpro\backend
 - Department hierarchy
 - Geofencing data
 
+### Option 3: Docker (Recommended)
+
+```bash
+# Run all tests in the container (Integration tests may fail if Docker socket is not shared)
+docker exec -it alftekpro-api dotnet test /app/tests
+```
+
+**Note on Integration Tests:** Integration tests use `Testcontainers` to spin up a real PostgreSQL instance. If running inside a Docker container, these tests will fail unless the Docker socket is shared. It is recommended to run integration tests locally on the host machine.
+
 ---
 
 ## Manual Testing (Swagger)
@@ -54,7 +63,7 @@ cd c:\Users\Admin\Documents\alftekpro\backend
    ```
 
 2. **Open Swagger:**
-   http://localhost:5000/swagger
+   http://localhost:5001/swagger (Docker) or http://localhost:5000/swagger (Local)
 
 3. **Follow test sequence:**
 

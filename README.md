@@ -124,7 +124,7 @@ docker-compose up -d --build worker
 
 ```bash
 # Access API container
-docker exec -it alftekpro-api bash
+docker exec -it alftekpro-api sh
 
 # Inside container, run migrations
 dotnet ef database update
@@ -184,14 +184,19 @@ alftekpro/
 ## 🧪 Running Tests
 
 ```bash
-# Run all tests
-docker exec -it alftekpro-api dotnet test
+# Run all tests in the container (Integration tests may fail if Docker socket is not shared)
+docker exec -it alftekpro-api dotnet test /app/tests
 
-# Run specific test project
-docker exec -it alftekpro-api dotnet test tests/AlfTekPro.UnitTests
+# Run unit tests only
+docker exec -it alftekpro-api dotnet test /app/tests/AlfTekPro.UnitTests
+
+# Run integration tests only
+# NOTE: Integration tests use Testcontainers and require access to the Docker daemon.
+# These tests are best run locally on the host machine.
+docker exec -it alftekpro-api dotnet test /app/tests/AlfTekPro.IntegrationTests
 
 # Run with coverage
-docker exec -it alftekpro-api dotnet test /p:CollectCoverage=true
+docker exec -it alftekpro-api dotnet test /app/tests /p:CollectCoverage=true
 ```
 
 ## 🔍 Troubleshooting

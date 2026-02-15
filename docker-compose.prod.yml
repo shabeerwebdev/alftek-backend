@@ -14,7 +14,7 @@ services:
   # API Service
   api:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
       target: production
     image: ${DOCKER_REGISTRY:-alftekpro.azurecr.io}/hrms-api:${IMAGE_TAG:-latest}
@@ -66,7 +66,7 @@ services:
   # Worker Service
   worker:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile.Worker
       target: production
     image: ${DOCKER_REGISTRY:-alftekpro.azurecr.io}/hrms-worker:${IMAGE_TAG:-latest}
