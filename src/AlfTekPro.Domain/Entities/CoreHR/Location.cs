@@ -75,6 +75,14 @@ public class Location : BaseTenantEntity
     /// </summary>
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Comma-separated working day names for this location's work week.
+    /// Defaults to Mon–Fri if null/empty.
+    /// Example: "Monday,Tuesday,Wednesday,Thursday,Friday"
+    /// Friday-Saturday week (UAE): "Sunday,Monday,Tuesday,Wednesday,Thursday"
+    /// </summary>
+    public string? WorkingDays { get; set; }
+
     // Navigation properties
 
     /// <summary>

@@ -59,6 +59,14 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.LastLogin)
             .HasColumnName("last_login");
 
+        builder.Property(u => u.FailedLoginAttempts)
+            .IsRequired()
+            .HasColumnName("failed_login_attempts")
+            .HasDefaultValue(0);
+
+        builder.Property(u => u.LockoutUntil)
+            .HasColumnName("lockout_until");
+
         builder.Property(u => u.CreatedAt)
             .IsRequired()
             .HasColumnName("created_at")

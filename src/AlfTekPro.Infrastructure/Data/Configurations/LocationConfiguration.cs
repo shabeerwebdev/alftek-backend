@@ -81,6 +81,10 @@ public class LocationConfiguration : IEntityTypeConfiguration<Location>
             .HasDefaultValue(true)
             .HasColumnName("is_active");
 
+        builder.Property(l => l.WorkingDays)
+            .HasMaxLength(100)
+            .HasColumnName("working_days");
+
         builder.Property(l => l.CreatedAt)
             .IsRequired()
             .HasColumnName("created_at")

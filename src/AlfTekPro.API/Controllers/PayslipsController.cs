@@ -16,13 +16,16 @@ namespace AlfTekPro.API.Controllers;
 public class PayslipsController : ControllerBase
 {
     private readonly IPayslipService _payslipService;
+    private readonly IPayslipPdfService _pdfService;
     private readonly ILogger<PayslipsController> _logger;
 
     public PayslipsController(
         IPayslipService payslipService,
+        IPayslipPdfService pdfService,
         ILogger<PayslipsController> logger)
     {
         _payslipService = payslipService;
+        _pdfService = pdfService;
         _logger = logger;
     }
 
@@ -108,6 +111,50 @@ public class PayslipsController : ControllerBase
             _logger.LogError(ex, "Error retrieving payslip: {PayslipId}", id);
             return StatusCode(500, ApiResponse<object>.ErrorResult(
                 "An error occurred while retrieving payslip"));
+        }
+    }
+
+    /// <summary>Download a single payslip as PDF</summary>
+    [HttpGet("{id:guid}/pdf")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DownloadPdf(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var bytes = await _pdfService.GenerateAsync(id, ct);
+            return File(bytes, "application/pdf", $"payslip-{id}.pdf");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(ApiResponse<object>.ErrorResult(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating PDF for payslip {Id}", id);
+            return StatusCode(500, ApiResponse<object>.ErrorResult("PDF generation failed"));
+        }
+    }
+
+    /// <summary>Download all payslips in a run as a merged PDF bundle</summary>
+    [HttpGet("run/{runId:guid}/pdf-bundle")]
+    [Authorize(Roles = "SA,TA,MGR")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DownloadBundle(Guid runId, CancellationToken ct)
+    {
+        try
+        {
+            var bytes = await _pdfService.GenerateBundleAsync(runId, ct);
+            return File(bytes, "application/pdf", $"payroll-run-{runId}.pdf");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(ApiResponse<object>.ErrorResult(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating PDF bundle for run {RunId}", runId);
+            return StatusCode(500, ApiResponse<object>.ErrorResult("PDF bundle generation failed"));
         }
     }
 }

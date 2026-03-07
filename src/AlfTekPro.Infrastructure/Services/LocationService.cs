@@ -159,7 +159,16 @@ public class LocationService : ILocationService
             return false;
         }
 
-        // TODO: Check if location is assigned to employees when Employee module is implemented
+        // Block delete if active employees are assigned to this location
+        var activeEmployeeCount = await _context.Employees
+            .Where(e => e.LocationId == id && e.Status != Domain.Enums.EmployeeStatus.Exited)
+            .CountAsync(cancellationToken);
+
+        if (activeEmployeeCount > 0)
+            throw new InvalidOperationException(
+                $"Cannot delete location: {activeEmployeeCount} active employee(s) are assigned to it. " +
+                "Reassign employees to another location first.");
+
         // Soft delete
         location.IsActive = false;
         await _context.SaveChangesAsync(cancellationToken);

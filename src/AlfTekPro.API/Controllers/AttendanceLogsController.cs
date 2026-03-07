@@ -210,7 +210,7 @@ public class AttendanceLogsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<AttendanceLogResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RegularizeAttendance(Guid id, [FromBody] RegularizationRequest request)
+    public async Task<IActionResult> RegularizeAttendance(Guid id, [FromBody] AttendanceLogRegularizationRequest request)
     {
         try
         {

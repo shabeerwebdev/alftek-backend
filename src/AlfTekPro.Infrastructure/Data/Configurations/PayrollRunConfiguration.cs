@@ -25,6 +25,9 @@ public class PayrollRunConfiguration : IEntityTypeConfiguration<PayrollRun>
             .HasDefaultValue(PayrollRunStatus.Draft);
         builder.Property(pr => pr.S3PathPdfBundle).HasMaxLength(500).HasColumnName("s3_path_pdf_bundle");
         builder.Property(pr => pr.ProcessedAt).HasColumnName("processed_at");
+        builder.Property(pr => pr.ApprovedBy).HasColumnName("approved_by");
+        builder.Property(pr => pr.ApprovedAt).HasColumnName("approved_at");
+        builder.Property(pr => pr.RejectionReason).HasMaxLength(1000).HasColumnName("rejection_reason");
         builder.Property(pr => pr.CreatedAt).IsRequired().HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
         builder.Property(pr => pr.UpdatedAt).HasColumnName("updated_at");
 

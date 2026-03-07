@@ -66,6 +66,11 @@ public class AttendanceLog : BaseTenantEntity
     public int LateByMinutes { get; set; }
 
     /// <summary>
+    /// Overtime worked in minutes (computed from ClockOut vs shift end time).
+    /// </summary>
+    public int OvertimeMinutes { get; set; }
+
+    /// <summary>
     /// Whether this attendance has been regularized by manager
     /// </summary>
     public bool IsRegularized { get; set; }

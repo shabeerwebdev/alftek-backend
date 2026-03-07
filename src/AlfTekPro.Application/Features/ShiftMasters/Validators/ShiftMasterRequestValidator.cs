@@ -27,8 +27,8 @@ public class ShiftMasterRequestValidator : AbstractValidator<ShiftMasterRequest>
             .NotEmpty().WithMessage("End time is required");
 
         RuleFor(x => x)
-            .Must(x => x.EndTime > x.StartTime)
-            .WithMessage("End time must be after start time");
+            .Must(x => x.EndTime != x.StartTime)
+            .WithMessage("Shift duration cannot be zero (Start time and End time must be different)");
 
         RuleFor(x => x.GracePeriodMinutes)
             .InclusiveBetween(0, 120).WithMessage("Grace period must be between 0 and 120 minutes");

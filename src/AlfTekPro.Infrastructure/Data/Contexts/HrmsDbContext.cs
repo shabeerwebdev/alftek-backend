@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using AlfTekPro.Application.Common.Interfaces;
 using AlfTekPro.Domain.Common;
@@ -19,12 +20,15 @@ namespace AlfTekPro.Infrastructure.Data.Contexts;
 public class HrmsDbContext : DbContext
 {
     private readonly ITenantContext _tenantContext;
+    private readonly ICurrentUserService? _currentUserService;
 
     public HrmsDbContext(
         DbContextOptions<HrmsDbContext> options,
-        ITenantContext tenantContext) : base(options)
+        ITenantContext tenantContext,
+        ICurrentUserService? currentUserService = null) : base(options)
     {
         _tenantContext = tenantContext;
+        _currentUserService = currentUserService;
     }
 
     #region Platform Module DbSets
@@ -38,6 +42,9 @@ public class HrmsDbContext : DbContext
     /// Tenants (Organizations)
     /// </summary>
     public DbSet<Tenant> Tenants => Set<Tenant>();
+
+    /// <summary>Tenant company bank accounts (for payroll disbursement).</summary>
+    public DbSet<TenantBankAccount> TenantBankAccounts => Set<TenantBankAccount>();
 
     /// <summary>
     /// Users with authentication details
@@ -53,6 +60,17 @@ public class HrmsDbContext : DbContext
     /// Dynamic form templates (region-specific)
     /// </summary>
     public DbSet<FormTemplate> FormTemplates => Set<FormTemplate>();
+
+    /// <summary>
+    /// Immutable audit trail for all entity changes
+    /// </summary>
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    /// <summary>
+    /// Region-level statutory contribution rules (EPF, PF, SOCSO, ESI, CPF, etc.)
+    /// </summary>
+    public DbSet<StatutoryContributionRule> StatutoryContributionRules
+        => Set<StatutoryContributionRule>();
 
     #endregion
 
@@ -83,6 +101,30 @@ public class HrmsDbContext : DbContext
     /// </summary>
     public DbSet<EmployeeJobHistory> EmployeeJobHistories => Set<EmployeeJobHistory>();
 
+    /// <summary>
+    /// Employee salary payment bank accounts
+    /// </summary>
+    public DbSet<EmployeeBankAccount> EmployeeBankAccounts => Set<EmployeeBankAccount>();
+
+    /// <summary>
+    /// Employee emergency contacts
+    /// </summary>
+    public DbSet<EmergencyContact> EmergencyContacts => Set<EmergencyContact>();
+
+    /// <summary>
+    /// Tenant public holidays (excluded from working-day calculations)
+    /// </summary>
+    public DbSet<PublicHoliday> PublicHolidays => Set<PublicHoliday>();
+
+    /// <summary>
+    /// HR documents attached to employees (metadata; files are in object store).
+    /// </summary>
+    public DbSet<EmployeeDocument> EmployeeDocuments => Set<EmployeeDocument>();
+
+    public DbSet<EmployeeQualification> EmployeeQualifications => Set<EmployeeQualification>();
+    public DbSet<EmployeeWorkExperience> EmployeeWorkExperiences => Set<EmployeeWorkExperience>();
+    public DbSet<EmployeeCertification> EmployeeCertifications => Set<EmployeeCertification>();
+
     #endregion
 
     #region Workforce Module DbSets
@@ -101,6 +143,12 @@ public class HrmsDbContext : DbContext
     /// Attendance logs (clock-in/out records)
     /// </summary>
     public DbSet<AttendanceLog> AttendanceLogs => Set<AttendanceLog>();
+
+    /// <summary>
+    /// Attendance regularization requests (employee-submitted corrections)
+    /// </summary>
+    public DbSet<AttendanceRegularizationRequest> AttendanceRegularizationRequests
+        => Set<AttendanceRegularizationRequest>();
 
     #endregion
 
@@ -153,6 +201,9 @@ public class HrmsDbContext : DbContext
     /// Individual employee payslips
     /// </summary>
     public DbSet<Payslip> Payslips => Set<Payslip>();
+
+    /// <summary>Full and Final Settlements for exiting employees</summary>
+    public DbSet<FnFSettlement> FnFSettlements => Set<FnFSettlement>();
 
     #endregion
 
@@ -213,14 +264,16 @@ public class HrmsDbContext : DbContext
 
     #endregion
 
-    #region SaveChanges Override - Auto-inject TenantId
+    #region SaveChanges Override - Auto-inject TenantId + Audit
 
     /// <summary>
-    /// Overrides SaveChanges to automatically inject TenantId for new tenant-scoped entities
-    /// This ensures all tenant data is properly isolated
+    /// Overrides SaveChanges to automatically inject TenantId, timestamps, and write audit logs.
     /// </summary>
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        // Capture audit entries BEFORE save so we can read OriginalValues for Modified/Deleted
+        var auditEntries = CaptureAuditEntries();
+
         // Auto-populate TenantId for new tenant-scoped entities
         foreach (var entry in ChangeTracker.Entries<ITenantEntity>()
             .Where(e => e.State == EntityState.Added))
@@ -252,7 +305,16 @@ public class HrmsDbContext : DbContext
             }
         }
 
-        return await base.SaveChangesAsync(cancellationToken);
+        var result = await base.SaveChangesAsync(cancellationToken);
+
+        // Persist audit entries via a direct base call to avoid recursive auditing
+        if (auditEntries.Count > 0)
+        {
+            Set<AuditLog>().AddRange(auditEntries);
+            await base.SaveChangesAsync(cancellationToken);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -261,6 +323,63 @@ public class HrmsDbContext : DbContext
     public override int SaveChanges()
     {
         return SaveChangesAsync().GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Snapshots current ChangeTracker entries into AuditLog records.
+    /// Must be called before base.SaveChangesAsync so OriginalValues are still available.
+    /// </summary>
+    private List<AuditLog> CaptureAuditEntries()
+    {
+        var entries = new List<AuditLog>();
+
+        foreach (var entry in ChangeTracker.Entries()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted
+                        && e.Entity is not AuditLog))
+        {
+            var action = entry.State switch
+            {
+                EntityState.Added    => "Created",
+                EntityState.Modified => "Updated",
+                EntityState.Deleted  => "Deleted",
+                _                    => "Unknown"
+            };
+
+            var entityId = entry.Properties
+                .FirstOrDefault(p => p.Metadata.IsPrimaryKey())?.CurrentValue?.ToString() ?? "unknown";
+
+            string? oldValues = null;
+            string? newValues = null;
+
+            if (entry.State is EntityState.Modified or EntityState.Deleted)
+            {
+                oldValues = JsonSerializer.Serialize(
+                    entry.Properties.ToDictionary(p => p.Metadata.Name, p => p.OriginalValue));
+            }
+
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                newValues = JsonSerializer.Serialize(
+                    entry.Properties.ToDictionary(p => p.Metadata.Name, p => p.CurrentValue));
+            }
+
+            var tenantId = entry.Entity is ITenantEntity te ? te.TenantId : (Guid?)null;
+
+            entries.Add(new AuditLog
+            {
+                TenantId   = tenantId,
+                UserId     = _currentUserService?.UserId,
+                UserEmail  = _currentUserService?.UserEmail,
+                Action     = action,
+                EntityName = entry.Entity.GetType().Name,
+                EntityId   = entityId,
+                OldValues  = oldValues,
+                NewValues  = newValues,
+                CreatedAt  = DateTime.UtcNow
+            });
+        }
+
+        return entries;
     }
 
     #endregion

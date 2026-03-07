@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using AlfTekPro.Application.Common.Interfaces;
 using AlfTekPro.Application.Features.LeaveRequests.DTOs;
 using AlfTekPro.Application.Features.LeaveRequests.Interfaces;
 using AlfTekPro.Domain.Entities.Leave;
@@ -13,10 +14,12 @@ namespace AlfTekPro.Infrastructure.Services;
 public class LeaveRequestService : ILeaveRequestService
 {
     private readonly HrmsDbContext _context;
+    private readonly IWorkingDayCalculatorService _workingDayCalc;
 
-    public LeaveRequestService(HrmsDbContext context)
+    public LeaveRequestService(HrmsDbContext context, IWorkingDayCalculatorService workingDayCalc)
     {
         _context = context;
+        _workingDayCalc = workingDayCalc;
     }
 
     public async Task<List<LeaveRequestResponse>> GetAllLeaveRequestsAsync(
@@ -113,19 +116,57 @@ public class LeaveRequestService : ILeaveRequestService
             throw new InvalidOperationException($"Leave type '{leaveType.Name}' is inactive");
         }
 
+        // Half-day validations
+        if (request.IsHalfDay)
+        {
+            if (!leaveType.AllowsHalfDay)
+                throw new InvalidOperationException($"Leave type '{leaveType.Name}' does not support half-day requests");
+
+            if (request.StartDate.Date != request.EndDate.Date)
+                throw new InvalidOperationException("Half-day requests must have the same start and end date");
+
+            if (string.IsNullOrWhiteSpace(request.HalfDayPeriod))
+                throw new InvalidOperationException("HalfDayPeriod ('Morning' or 'Afternoon') is required for half-day requests");
+        }
+
         // Calculate number of days
         // PostgreSQL timestamptz requires UTC - explicitly set Kind after .Date (which resets to Unspecified)
         var startDate = DateTime.SpecifyKind(request.StartDate.Date, DateTimeKind.Utc);
         var endDate = DateTime.SpecifyKind(request.EndDate.Date, DateTimeKind.Utc);
-        var daysCount = CalculateWorkingDays(startDate, endDate);
+
+        decimal daysCount;
+        if (request.IsHalfDay)
+        {
+            daysCount = 0.5m;
+        }
+        else
+        {
+            daysCount = await _workingDayCalc.CountAsync(
+                employee.TenantId, startDate, endDate, employee.LocationId, cancellationToken);
+        }
 
         // Check for overlapping leave requests
-        var hasOverlap = await _context.LeaveRequests
-            .AnyAsync(lr =>
+        // Half-day exception: same single day, different periods => not an overlap
+        var overlappingRequests = await _context.LeaveRequests
+            .Where(lr =>
                 lr.EmployeeId == request.EmployeeId &&
                 lr.Status != LeaveRequestStatus.Rejected &&
-                ((lr.StartDate <= endDate && lr.EndDate >= startDate)),
-                cancellationToken);
+                lr.StartDate <= endDate && lr.EndDate >= startDate)
+            .ToListAsync(cancellationToken);
+
+        var hasOverlap = overlappingRequests.Any(lr =>
+        {
+            // Two half-days on the same single day with different periods → allowed
+            if (request.IsHalfDay && lr.IsHalfDay
+                && lr.StartDate.Date == startDate.Date && lr.EndDate.Date == endDate.Date
+                && !string.IsNullOrWhiteSpace(lr.HalfDayPeriod)
+                && !string.IsNullOrWhiteSpace(request.HalfDayPeriod)
+                && lr.HalfDayPeriod != request.HalfDayPeriod)
+            {
+                return false;
+            }
+            return true;
+        });
 
         if (hasOverlap)
         {
@@ -163,6 +204,8 @@ public class LeaveRequestService : ILeaveRequestService
             StartDate = startDate,
             EndDate = endDate,
             DaysCount = daysCount,
+            IsHalfDay = request.IsHalfDay,
+            HalfDayPeriod = request.IsHalfDay ? request.HalfDayPeriod : null,
             Reason = request.Reason,
             Status = leaveType.RequiresApproval ? LeaveRequestStatus.Pending : LeaveRequestStatus.Approved
         };
@@ -307,17 +350,6 @@ public class LeaveRequestService : ILeaveRequestService
         return true;
     }
 
-    /// <summary>
-    /// Calculate working days between two dates (inclusive)
-    /// This is a simple implementation that counts all days including weekends
-    /// In a real system, you would exclude weekends and public holidays
-    /// </summary>
-    private decimal CalculateWorkingDays(DateTime startDate, DateTime endDate)
-    {
-        var days = (endDate - startDate).Days + 1; // +1 to include both start and end dates
-        return days;
-    }
-
     private LeaveRequestResponse MapToLeaveRequestResponse(LeaveRequest leaveRequest)
     {
         return new LeaveRequestResponse
@@ -334,6 +366,8 @@ public class LeaveRequestService : ILeaveRequestService
             EndDate = leaveRequest.EndDate,
             EndDateFormatted = leaveRequest.EndDate.ToString("yyyy-MM-dd"),
             DaysCount = leaveRequest.DaysCount,
+            IsHalfDay = leaveRequest.IsHalfDay,
+            HalfDayPeriod = leaveRequest.HalfDayPeriod,
             Reason = leaveRequest.Reason,
             Status = leaveRequest.Status,
             ApprovedBy = leaveRequest.ApprovedBy,

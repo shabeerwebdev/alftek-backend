@@ -32,6 +32,17 @@ public class LeaveRequestRequest
     public DateTime EndDate { get; set; }
 
     /// <summary>
+    /// Whether this is a half-day leave request (only valid when StartDate == EndDate)
+    /// </summary>
+    public bool IsHalfDay { get; set; }
+
+    /// <summary>
+    /// Half day period: "Morning" or "Afternoon" (required when IsHalfDay is true)
+    /// </summary>
+    [RegularExpression("^(Morning|Afternoon)$", ErrorMessage = "HalfDayPeriod must be 'Morning' or 'Afternoon'")]
+    public string? HalfDayPeriod { get; set; }
+
+    /// <summary>
     /// Reason for leave
     /// </summary>
     [StringLength(500, ErrorMessage = "Reason must not exceed 500 characters")]

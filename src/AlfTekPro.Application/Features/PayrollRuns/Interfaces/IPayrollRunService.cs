@@ -46,4 +46,21 @@ public interface IPayrollRunService
     Task<bool> DeleteRunAsync(
         Guid id,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Validate payroll readiness for a given month/year.
+    /// Returns a report with blocking errors and advisory warnings per employee.
+    /// </summary>
+    Task<PayrollValidationReport> ValidateAsync(
+        Guid tenantId, int month, int year,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Finance approves a Completed payroll run → status Approved.</summary>
+    Task<PayrollRunResponse> ApproveAsync(Guid runId, Guid approverId, CancellationToken ct = default);
+
+    /// <summary>Finance rejects a Completed payroll run → status Rejected.</summary>
+    Task<PayrollRunResponse> RejectAsync(Guid runId, string reason, CancellationToken ct = default);
+
+    /// <summary>HR/Admin publishes an Approved payroll run → status Published.</summary>
+    Task<PayrollRunResponse> PublishAsync(Guid runId, CancellationToken ct = default);
 }

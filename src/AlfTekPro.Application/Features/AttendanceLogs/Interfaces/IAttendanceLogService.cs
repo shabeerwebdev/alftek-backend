@@ -67,7 +67,7 @@ public interface IAttendanceLogService
     /// <param name="request">Regularization request with reason</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Updated attendance log</returns>
-    Task<AttendanceLogResponse> RegularizeAttendanceAsync(Guid id, RegularizationRequest request, CancellationToken cancellationToken = default);
+    Task<AttendanceLogResponse> RegularizeAttendanceAsync(Guid id, AttendanceLogRegularizationRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Delete an attendance log

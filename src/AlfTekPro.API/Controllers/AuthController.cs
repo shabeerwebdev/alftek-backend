@@ -57,9 +57,26 @@ public class AuthController : ControllerBase
                 return Unauthorized(ApiResponse<object>.ErrorResult("Invalid email or password"));
             }
 
+            // Check lockout before verifying password
+            if (user.LockoutUntil.HasValue && user.LockoutUntil > DateTime.UtcNow)
+            {
+                var remaining = (int)Math.Ceiling((user.LockoutUntil.Value - DateTime.UtcNow).TotalMinutes);
+                _logger.LogWarning("Login attempt on locked account: {Email}", request.Email);
+                return StatusCode(423, ApiResponse<object>.ErrorResult(
+                    $"Account locked. Try again after {remaining} minute(s)."));
+            }
+
             // Verify password using BCrypt
             if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             {
+                user.FailedLoginAttempts++;
+                if (user.FailedLoginAttempts >= 5)
+                {
+                    user.LockoutUntil = DateTime.UtcNow.AddMinutes(15);
+                    _logger.LogWarning("Account locked after {Attempts} failed attempts: {Email}",
+                        user.FailedLoginAttempts, request.Email);
+                }
+                await _context.SaveChangesAsync();
                 _logger.LogWarning("Login attempt with invalid password for user: {Email}", request.Email);
                 return Unauthorized(ApiResponse<object>.ErrorResult("Invalid email or password"));
             }
@@ -95,8 +112,10 @@ public class AuthController : ControllerBase
             };
             _context.RefreshTokens.Add(refreshTokenEntity);
 
-            // Update last login
+            // Update last login and reset lockout state
             user.LastLogin = DateTime.UtcNow;
+            user.FailedLoginAttempts = 0;
+            user.LockoutUntil = null;
             await _context.SaveChangesAsync();
 
             var expiryMinutes = int.Parse(_configuration["JWT:ExpiryMinutes"] ?? "60");

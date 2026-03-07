@@ -19,6 +19,8 @@ public class LeaveRequestConfiguration : IEntityTypeConfiguration<LeaveRequest>
         builder.Property(lr => lr.StartDate).IsRequired().HasColumnName("start_date");
         builder.Property(lr => lr.EndDate).IsRequired().HasColumnName("end_date");
         builder.Property(lr => lr.DaysCount).IsRequired().HasColumnType("decimal(4,2)").HasColumnName("days_count");
+        builder.Property(lr => lr.IsHalfDay).IsRequired().HasColumnName("is_half_day").HasDefaultValue(false);
+        builder.Property(lr => lr.HalfDayPeriod).HasMaxLength(20).HasColumnName("half_day_period");
         builder.Property(lr => lr.Reason).HasMaxLength(1000).HasColumnName("reason");
         builder.Property(lr => lr.Status).IsRequired().HasColumnName("status").HasConversion<string>().HasMaxLength(20);
         builder.Property(lr => lr.ApprovedBy).HasColumnName("approved_by");

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using AlfTekPro.Application.Common.Interfaces;
 using AlfTekPro.Application.Features.Employees.DTOs;
 using AlfTekPro.Application.Features.Employees.Interfaces;
 using AlfTekPro.Domain.Entities.CoreHR;
@@ -15,13 +16,16 @@ namespace AlfTekPro.Infrastructure.Services;
 public class EmployeeService : IEmployeeService
 {
     private readonly HrmsDbContext _context;
+    private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<EmployeeService> _logger;
 
     public EmployeeService(
         HrmsDbContext context,
+        ICurrentUserService currentUserService,
         ILogger<EmployeeService> logger)
     {
         _context = context;
+        _currentUserService = currentUserService;
         _logger = logger;
     }
 
@@ -37,6 +41,8 @@ public class EmployeeService : IEmployeeService
             .Include(e => e.Designation)
             .Include(e => e.Location)
             .Include(e => e.ReportingManager)
+            .Include(e => e.JobHistories.Where(h => h.ValidTo == null))
+                .ThenInclude(h => h.SalaryTier)
             .AsQueryable();
 
         if (status.HasValue)
@@ -76,6 +82,8 @@ public class EmployeeService : IEmployeeService
             .Include(e => e.Designation)
             .Include(e => e.Location)
             .Include(e => e.ReportingManager)
+            .Include(e => e.JobHistories.Where(h => h.ValidTo == null))
+                .ThenInclude(h => h.SalaryTier)
             .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
         return employee != null ? MapToEmployeeResponse(employee) : null;
@@ -90,6 +98,8 @@ public class EmployeeService : IEmployeeService
             .Include(e => e.Designation)
             .Include(e => e.Location)
             .Include(e => e.ReportingManager)
+            .Include(e => e.JobHistories.Where(h => h.ValidTo == null))
+                .ThenInclude(h => h.SalaryTier)
             .FirstOrDefaultAsync(e => e.EmployeeCode == employeeCode, cancellationToken);
 
         return employee != null ? MapToEmployeeResponse(employee) : null;
@@ -158,6 +168,18 @@ public class EmployeeService : IEmployeeService
             }
         }
 
+        // Validate salary structure exists
+        if (request.SalaryStructureId.HasValue)
+        {
+            var structureExists = await _context.SalaryStructures
+                .AnyAsync(s => s.Id == request.SalaryStructureId.Value, cancellationToken);
+
+            if (!structureExists)
+            {
+                throw new InvalidOperationException("Salary structure not found");
+            }
+        }
+
         // Serialize dynamic data to JSON string
         string? dynamicDataJson = null;
         if (request.DynamicData != null && request.DynamicData.Any())
@@ -195,10 +217,11 @@ public class EmployeeService : IEmployeeService
             DesignationId = employee.DesignationId,
             LocationId = employee.LocationId,
             ReportingManagerId = employee.ReportingManagerId,
+            SalaryTierId = request.SalaryStructureId,
             ValidFrom = employee.JoiningDate,
             ChangeType = "NEW_JOINING",
             ChangeReason = "Initial onboarding",
-            CreatedBy = null // TODO: Get from current user context (HttpContext)
+            CreatedBy = _currentUserService.UserId
         };
 
         _context.EmployeeJobHistories.Add(jobHistory);
@@ -259,6 +282,18 @@ public class EmployeeService : IEmployeeService
         if (!designationExists) throw new InvalidOperationException("Designation not found");
         if (!locationExists) throw new InvalidOperationException("Location not found");
 
+        // Validate salary structure exists
+        if (request.SalaryStructureId.HasValue)
+        {
+            var structureExists = await _context.SalaryStructures
+                .AnyAsync(s => s.Id == request.SalaryStructureId.Value, cancellationToken);
+
+            if (!structureExists)
+            {
+                throw new InvalidOperationException("Salary structure not found");
+            }
+        }
+
         // Serialize dynamic data
         string? dynamicDataJson = null;
         if (request.DynamicData != null && request.DynamicData.Any())
@@ -266,17 +301,28 @@ public class EmployeeService : IEmployeeService
             dynamicDataJson = JsonSerializer.Serialize(request.DynamicData);
         }
 
+        employee.LocationId = request.LocationId;
+        employee.ReportingManagerId = request.ReportingManagerId;
+
         // Detect job-related changes for SCD Type 2 tracking
+        var activeHistory = await _context.EmployeeJobHistories
+            .Where(h => h.EmployeeId == id && h.ValidTo == null)
+            .OrderByDescending(h => h.ValidFrom)
+            .FirstOrDefaultAsync(cancellationToken);
+
         bool jobChanged = employee.DepartmentId != request.DepartmentId
             || employee.DesignationId != request.DesignationId
             || employee.LocationId != request.LocationId
-            || employee.ReportingManagerId != request.ReportingManagerId;
+            || employee.ReportingManagerId != request.ReportingManagerId
+            || (activeHistory != null && activeHistory.SalaryTierId != request.SalaryStructureId);
 
         // Determine change type
         string? changeType = null;
         if (jobChanged)
         {
-            if (employee.DepartmentId != request.DepartmentId && employee.LocationId != request.LocationId)
+            if (activeHistory != null && activeHistory.SalaryTierId != request.SalaryStructureId)
+                changeType = "SALARY_REVISION";
+            else if (employee.DepartmentId != request.DepartmentId && employee.LocationId != request.LocationId)
                 changeType = "TRANSFER";
             else if (employee.DesignationId != request.DesignationId)
                 changeType = "PROMOTION";
@@ -297,9 +343,6 @@ public class EmployeeService : IEmployeeService
         employee.Gender = request.Gender;
         employee.JoiningDate = request.JoiningDate;
         employee.DepartmentId = request.DepartmentId;
-        employee.DesignationId = request.DesignationId;
-        employee.LocationId = request.LocationId;
-        employee.ReportingManagerId = request.ReportingManagerId;
         employee.UserId = request.UserId;
         employee.Status = request.Status;
         employee.DynamicData = dynamicDataJson;
@@ -328,9 +371,10 @@ public class EmployeeService : IEmployeeService
                 DesignationId = request.DesignationId,
                 LocationId = request.LocationId,
                 ReportingManagerId = request.ReportingManagerId,
+                SalaryTierId = request.SalaryStructureId,
                 ValidFrom = now,
                 ChangeType = changeType,
-                CreatedBy = null // TODO: Get from current user context (HttpContext)
+                CreatedBy = _currentUserService.UserId
             };
 
             _context.EmployeeJobHistories.Add(newHistory);
@@ -359,6 +403,18 @@ public class EmployeeService : IEmployeeService
         if (employee == null)
         {
             throw new InvalidOperationException("Employee not found");
+        }
+
+        if (status == EmployeeStatus.Exited)
+        {
+            var activeAssignments = await _context.AssetAssignments
+                .Where(a => a.EmployeeId == id && a.ReturnedDate == null)
+                .CountAsync(cancellationToken);
+
+            if (activeAssignments > 0)
+                throw new InvalidOperationException(
+                    $"Cannot exit employee: {activeAssignments} asset(s) are still assigned. " +
+                    "Return all assets before marking as Exited.");
         }
 
         employee.Status = status;
@@ -436,10 +492,11 @@ public class EmployeeService : IEmployeeService
             DesignationTitle = employee.Designation?.Title ?? string.Empty,
             LocationId = employee.LocationId,
             LocationName = employee.Location?.Name ?? string.Empty,
-            ReportingManagerId = employee.ReportingManagerId,
             ReportingManagerName = employee.ReportingManager != null
                 ? $"{employee.ReportingManager.FirstName} {employee.ReportingManager.LastName}"
                 : null,
+            SalaryStructureId = employee.JobHistories?.FirstOrDefault(h => h.ValidTo == null)?.SalaryTierId,
+            SalaryStructureName = employee.JobHistories?.FirstOrDefault(h => h.ValidTo == null)?.SalaryTier?.Name,
             UserId = employee.UserId,
             Status = employee.Status,
             StatusText = employee.Status.ToString(),

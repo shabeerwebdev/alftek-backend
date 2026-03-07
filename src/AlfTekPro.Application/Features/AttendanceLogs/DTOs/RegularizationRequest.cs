@@ -5,7 +5,7 @@ namespace AlfTekPro.Application.Features.AttendanceLogs.DTOs;
 /// <summary>
 /// Request DTO for attendance regularization
 /// </summary>
-public class RegularizationRequest
+public class AttendanceLogRegularizationRequest
 {
     /// <summary>
     /// Reason for regularization

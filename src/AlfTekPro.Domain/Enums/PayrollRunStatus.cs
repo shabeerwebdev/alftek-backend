@@ -33,5 +33,11 @@ public enum PayrollRunStatus
     /// Payroll run rejected/cancelled
     /// Terminal state, new run can be created
     /// </summary>
-    Rejected = 4
+    Rejected = 4,
+
+    /// <summary>
+    /// Finance has approved the payroll run.
+    /// Ready to be published/disbursed.
+    /// </summary>
+    Approved = 5
 }

@@ -50,6 +50,18 @@ public class User : BaseEntity
     /// </summary>
     public DateTime? LastLogin { get; set; }
 
+    /// <summary>
+    /// Number of consecutive failed login attempts since last successful login.
+    /// Reset to 0 on successful login.
+    /// </summary>
+    public int FailedLoginAttempts { get; set; } = 0;
+
+    /// <summary>
+    /// When non-null, the account is locked until this UTC time.
+    /// Set after 5 consecutive failed attempts; lock duration is 15 minutes.
+    /// </summary>
+    public DateTime? LockoutUntil { get; set; }
+
     // Navigation properties
 
     /// <summary>

@@ -39,6 +39,11 @@ public class LeaveType : BaseTenantEntity
     /// </summary>
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Whether employees can request half-day leave for this type
+    /// </summary>
+    public bool AllowsHalfDay { get; set; }
+
     // Navigation properties
 
     /// <summary>

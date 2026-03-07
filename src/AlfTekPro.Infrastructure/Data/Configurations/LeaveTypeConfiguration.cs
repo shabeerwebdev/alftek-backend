@@ -20,6 +20,7 @@ public class LeaveTypeConfiguration : IEntityTypeConfiguration<LeaveType>
         builder.Property(lt => lt.IsCarryForward).IsRequired().HasColumnName("is_carry_forward").HasDefaultValue(false);
         builder.Property(lt => lt.RequiresApproval).IsRequired().HasColumnName("requires_approval").HasDefaultValue(true);
         builder.Property(lt => lt.IsActive).IsRequired().HasColumnName("is_active").HasDefaultValue(true);
+        builder.Property(lt => lt.AllowsHalfDay).IsRequired().HasColumnName("allows_half_day").HasDefaultValue(false);
         builder.Property(lt => lt.CreatedAt).IsRequired().HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
         builder.Property(lt => lt.UpdatedAt).HasColumnName("updated_at");
 

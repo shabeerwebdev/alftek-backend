@@ -34,6 +34,15 @@ public class PayrollRun : BaseTenantEntity
     /// </summary>
     public DateTime? ProcessedAt { get; set; }
 
+    /// <summary>UserId of the Finance approver.</summary>
+    public Guid? ApprovedBy { get; set; }
+
+    /// <summary>Timestamp of Finance approval.</summary>
+    public DateTime? ApprovedAt { get; set; }
+
+    /// <summary>Optional rejection reason (when Status = Rejected).</summary>
+    public string? RejectionReason { get; set; }
+
     // Navigation properties
 
     /// <summary>

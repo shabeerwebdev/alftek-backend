@@ -81,6 +81,11 @@ public class EmployeeRequest
     public Guid LocationId { get; set; }
 
     /// <summary>
+    /// Assigned Salary Structure ID
+    /// </summary>
+    public Guid? SalaryStructureId { get; set; }
+
+    /// <summary>
     /// Reporting manager employee ID (optional)
     /// </summary>
     public Guid? ReportingManagerId { get; set; }

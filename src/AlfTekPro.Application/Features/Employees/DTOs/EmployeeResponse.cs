@@ -98,6 +98,16 @@ public class EmployeeResponse
     public string LocationName { get; set; } = string.Empty;
 
     /// <summary>
+    /// Assigned Salary Structure ID
+    /// </summary>
+    public Guid? SalaryStructureId { get; set; }
+
+    /// <summary>
+    /// Assigned Salary Structure Name
+    /// </summary>
+    public string? SalaryStructureName { get; set; }
+
+    /// <summary>
     /// Reporting manager employee ID
     /// </summary>
     public Guid? ReportingManagerId { get; set; }

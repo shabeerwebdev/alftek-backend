@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using AlfTekPro.Application.Common.Interfaces;
 using AlfTekPro.Application.Features.PayrollRuns.DTOs;
 using AlfTekPro.Application.Features.PayrollRuns.Interfaces;
 using AlfTekPro.Application.Features.SalaryStructures.Interfaces;
@@ -19,15 +20,18 @@ public class PayrollRunService : IPayrollRunService
 {
     private readonly HrmsDbContext _context;
     private readonly ISalaryStructureService _salaryStructureService;
+    private readonly IWorkingDayCalculatorService _workingDayCalc;
     private readonly ILogger<PayrollRunService> _logger;
 
     public PayrollRunService(
         HrmsDbContext context,
         ISalaryStructureService salaryStructureService,
+        IWorkingDayCalculatorService workingDayCalc,
         ILogger<PayrollRunService> logger)
     {
         _context = context;
         _salaryStructureService = salaryStructureService;
+        _workingDayCalc = workingDayCalc;
         _logger = logger;
     }
 
@@ -134,8 +138,9 @@ public class PayrollRunService : IPayrollRunService
 
             _logger.LogInformation("Processing payroll for {Count} employees", employees.Count);
 
-            // Calculate working days for the month (exclude weekends)
-            int workingDays = CalculateWorkingDays(run.Month, run.Year);
+            // Calculate working days for the month (excludes weekends + public holidays)
+            int workingDays = await _workingDayCalc.CountForMonthAsync(
+                run.TenantId, run.Month, run.Year, locationId: null, cancellationToken);
 
             foreach (var employee in employees)
             {
@@ -153,7 +158,7 @@ public class PayrollRunService : IPayrollRunService
                 }
 
                 // Get actual attendance data for this month
-                var monthStart = new DateTime(run.Year, run.Month, 1);
+                var monthStart = new DateTime(run.Year, run.Month, 1, 0, 0, 0, DateTimeKind.Utc);
                 var monthEnd = monthStart.AddMonths(1);
 
                 int presentDays = await _context.AttendanceLogs
@@ -190,16 +195,23 @@ public class PayrollRunService : IPayrollRunService
                     continue;
                 }
 
-                // Parse components to build breakdown
+                // Parse components to build breakdown (earnings at full rates; LOP is in deductions)
                 var breakdown = await BuildPayslipBreakdownAsync(
                     structure.ComponentsJson,
                     workingDays,
                     presentDays,
                     cancellationToken);
 
-                // Calculate deductions
+                // Gross = full monthly earnings; deductions include LOP when absentDays > 0
+                decimal fullGrossEarnings = breakdown.Earnings.Sum(e => e.Amount);
                 decimal totalDeductions = breakdown.Deductions.Sum(d => d.Amount);
-                decimal netPay = Math.Max(0, grossSalary - totalDeductions);
+                decimal netPay = fullGrossEarnings - totalDeductions;
+
+                if (netPay < 0)
+                    throw new InvalidOperationException(
+                        $"Payslip for employee {employee.EmployeeCode} has negative net pay " +
+                        $"(Gross: {fullGrossEarnings}, Deductions: {totalDeductions}). " +
+                        "Review the salary structure before processing.");
 
                 // Create payslip
                 var payslip = new Payslip
@@ -208,7 +220,7 @@ public class PayrollRunService : IPayrollRunService
                     EmployeeId = employee.Id,
                     WorkingDays = workingDays,
                     PresentDays = presentDays,
-                    GrossEarnings = grossSalary,
+                    GrossEarnings = fullGrossEarnings,
                     TotalDeductions = totalDeductions,
                     NetPay = netPay,
                     BreakdownJson = JsonSerializer.Serialize(breakdown)
@@ -257,11 +269,12 @@ public class PayrollRunService : IPayrollRunService
             return false;
         }
 
-        // BR-PAYROLL-003: Can only delete Draft runs
+        // BR-PAYROLL-003: Only Draft runs can be deleted — processed payslips must not be destroyed
         if (run.Status != PayrollRunStatus.Draft)
         {
             throw new InvalidOperationException(
-                $"Cannot delete payroll run with status {run.Status}. Only Draft runs can be deleted.");
+                "Cannot delete a payroll run that has been processed. " +
+                "Contact your administrator if correction is needed.");
         }
 
         _context.PayrollRuns.Remove(run);
@@ -305,52 +318,89 @@ public class PayrollRunService : IPayrollRunService
             }
         }
 
-        // Pass 2: Build breakdown with proper calculation
+        // Pass 2: Earnings shown at full monthly rates; track accumulator for LOP
+        decimal fullMonthEarnings = 0;
+        decimal proRatedEarnings = 0;
+
         foreach (var comp in components)
         {
             if (!dbComponents.TryGetValue(comp.ComponentId, out var dbComp))
                 continue;
 
-            decimal monthlyAmount;
+            decimal fullAmount;
+            decimal proRatedAmount;
             string calcNote;
 
             if (comp.CalculationType == "Percentage")
             {
-                monthlyAmount = fixedEarningsBase * (comp.Amount / 100m);
-                var proRatedAmount = (monthlyAmount / workingDays) * presentDays;
-                calcNote = $"{comp.Amount}% of {fixedEarningsBase:N2} = {monthlyAmount:N2}, pro-rated: ({monthlyAmount:N2} / {workingDays}) × {presentDays}";
-
-                var lineItem = new PayslipLineItem
-                {
-                    Code = dbComp.Code,
-                    Name = dbComp.Name,
-                    Amount = Math.Round(proRatedAmount, 2),
-                    CalculationNote = calcNote
-                };
+                fullAmount = fixedEarningsBase * (comp.Amount / 100m);
+                proRatedAmount = (fullAmount / workingDays) * presentDays;
+                calcNote = $"{comp.Amount}% of {fixedEarningsBase:N2} = {fullAmount:N2}";
 
                 if (dbComp.Type == SalaryComponentType.Earning)
-                    breakdown.Earnings.Add(lineItem);
+                {
+                    breakdown.Earnings.Add(new PayslipLineItem
+                    {
+                        Code = dbComp.Code, Name = dbComp.Name,
+                        Amount = Math.Round(fullAmount, 2), // show full month rate
+                        CalculationNote = calcNote
+                    });
+                    fullMonthEarnings += Math.Round(fullAmount, 2);
+                    proRatedEarnings += Math.Round(proRatedAmount, 2);
+                }
                 else
-                    breakdown.Deductions.Add(lineItem);
+                {
+                    breakdown.Deductions.Add(new PayslipLineItem
+                    {
+                        Code = dbComp.Code, Name = dbComp.Name,
+                        Amount = Math.Round(fullAmount, 2),
+                        CalculationNote = calcNote
+                    });
+                }
             }
             else
             {
-                monthlyAmount = comp.Amount;
-                var proRatedAmount = (monthlyAmount / workingDays) * presentDays;
-                calcNote = $"({monthlyAmount:N2} / {workingDays} days) × {presentDays} days";
+                fullAmount = comp.Amount;
 
-                var lineItem = new PayslipLineItem
+                // BR-PAYROLL-007: Fixed deductions NOT pro-rated (PF, Insurance, Loans)
+                if (dbComp.Type == SalaryComponentType.Deduction)
                 {
-                    Code = dbComp.Code,
-                    Name = dbComp.Name,
-                    Amount = Math.Round(proRatedAmount, 2),
-                    CalculationNote = calcNote
-                };
-
-                if (dbComp.Type == SalaryComponentType.Earning)
-                    breakdown.Earnings.Add(lineItem);
+                    breakdown.Deductions.Add(new PayslipLineItem
+                    {
+                        Code = dbComp.Code, Name = dbComp.Name,
+                        Amount = Math.Round(fullAmount, 2),
+                        CalculationNote = "Fixed monthly deduction"
+                    });
+                }
                 else
-                    breakdown.Deductions.Add(lineItem);
+                {
+                    proRatedAmount = (fullAmount / workingDays) * presentDays;
+                    breakdown.Earnings.Add(new PayslipLineItem
+                    {
+                        Code = dbComp.Code, Name = dbComp.Name,
+                        Amount = Math.Round(fullAmount, 2), // full monthly rate
+                        CalculationNote = $"Full: {fullAmount:N2}"
+                    });
+                    fullMonthEarnings += Math.Round(fullAmount, 2);
+                    proRatedEarnings += Math.Round(proRatedAmount, 2);
+                }
+            }
+        }
+
+        // LOP: explicit deduction line when employee has absent days
+        int absentDays = workingDays - presentDays;
+        if (absentDays > 0 && fullMonthEarnings > 0)
+        {
+            var lopAmount = Math.Round(fullMonthEarnings - proRatedEarnings, 2);
+            if (lopAmount > 0)
+            {
+                breakdown.Deductions.Insert(0, new PayslipLineItem
+                {
+                    Code = "LOP",
+                    Name = "Loss of Pay",
+                    Amount = lopAmount,
+                    CalculationNote = $"({fullMonthEarnings:N2} / {workingDays} working days) × {absentDays} absent day(s)"
+                });
             }
         }
 
@@ -378,6 +428,9 @@ public class PayrollRunService : IPayrollRunService
             Status = run.Status,
             ProcessedAt = run.ProcessedAt,
             S3PathPdfBundle = run.S3PathPdfBundle,
+            ApprovedBy = run.ApprovedBy,
+            ApprovedAt = run.ApprovedAt,
+            RejectionReason = run.RejectionReason,
             TotalEmployees = payslips.Select(p => p.EmployeeId).Distinct().Count(),
             ProcessedPayslips = payslips.Count,
             TotalGrossPay = payslips.Sum(p => p.GrossEarnings),
@@ -387,33 +440,166 @@ public class PayrollRunService : IPayrollRunService
         };
     }
 
+    public async Task<PayrollRunResponse> ApproveAsync(Guid runId, Guid approverId, CancellationToken ct = default)
+    {
+        var run = await _context.PayrollRuns.FirstOrDefaultAsync(r => r.Id == runId, ct)
+            ?? throw new InvalidOperationException("Payroll run not found");
+
+        if (run.Status != PayrollRunStatus.Completed)
+            throw new InvalidOperationException(
+                $"Only Completed payroll runs can be approved. Current status: {run.Status}");
+
+        run.Status = PayrollRunStatus.Approved;
+        run.ApprovedBy = approverId;
+        run.ApprovedAt = DateTime.UtcNow;
+        run.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(ct);
+        return await MapToResponseAsync(run, ct);
+    }
+
+    public async Task<PayrollRunResponse> RejectAsync(Guid runId, string reason, CancellationToken ct = default)
+    {
+        var run = await _context.PayrollRuns.FirstOrDefaultAsync(r => r.Id == runId, ct)
+            ?? throw new InvalidOperationException("Payroll run not found");
+
+        if (run.Status != PayrollRunStatus.Completed)
+            throw new InvalidOperationException(
+                $"Only Completed payroll runs can be rejected. Current status: {run.Status}");
+
+        run.Status = PayrollRunStatus.Rejected;
+        run.RejectionReason = reason;
+        run.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(ct);
+        return await MapToResponseAsync(run, ct);
+    }
+
+    public async Task<PayrollRunResponse> PublishAsync(Guid runId, CancellationToken ct = default)
+    {
+        var run = await _context.PayrollRuns.FirstOrDefaultAsync(r => r.Id == runId, ct)
+            ?? throw new InvalidOperationException("Payroll run not found");
+
+        if (run.Status != PayrollRunStatus.Approved)
+            throw new InvalidOperationException(
+                $"Only Finance-approved payroll runs can be published. Current status: {run.Status}");
+
+        run.Status = PayrollRunStatus.Published;
+        run.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(ct);
+        return await MapToResponseAsync(run, ct);
+    }
+
+    public async Task<PayrollValidationReport> ValidateAsync(
+        Guid tenantId, int month, int year, CancellationToken ct = default)
+    {
+        var report = new PayrollValidationReport { Month = month, Year = year };
+
+        // All active employees
+        var employees = await _context.Employees
+            .Where(e => e.TenantId == tenantId && e.Status == EmployeeStatus.Active)
+            .Include(e => e.JobHistories)
+            .ToListAsync(ct);
+
+        report.TotalActiveEmployees = employees.Count;
+
+        // Primary bank accounts
+        var bankAccounts = (await _context.EmployeeBankAccounts
+            .Where(b => b.TenantId == tenantId && b.IsPrimary)
+            .Select(b => b.EmployeeId)
+            .ToListAsync(ct)).ToHashSet();
+
+        // Active rosters (any roster entry with EffectiveDate <= end of month)
+        var monthEnd = new DateTime(year, month, DateTime.DaysInMonth(year, month), 0, 0, 0, DateTimeKind.Utc);
+        var rosteredEmployees = (await _context.EmployeeRosters
+            .Where(r => r.TenantId == tenantId && r.EffectiveDate <= monthEnd)
+            .Select(r => r.EmployeeId)
+            .Distinct()
+            .ToListAsync(ct)).ToHashSet();
+
+        // Salary structures for this tenant
+        var salaryStructureIds = (await _context.SalaryStructures
+            .Where(s => s.TenantId == tenantId)
+            .Select(s => s.Id)
+            .ToListAsync(ct)).ToHashSet();
+
+        // Check if already run
+        var alreadyRun = await _context.PayrollRuns
+            .AnyAsync(r => r.TenantId == tenantId && r.Month == month && r.Year == year
+                        && r.Status != Domain.Enums.PayrollRunStatus.Draft, ct);
+        if (alreadyRun)
+        {
+            report.Issues.Add(new PayrollValidationIssue
+            {
+                Severity = "Error",
+                Code = "DUPLICATE_RUN",
+                Message = $"A payroll run for {month}/{year} has already been processed."
+            });
+        }
+
+        foreach (var emp in employees)
+        {
+            // Check bank account
+            if (!bankAccounts.Contains(emp.Id))
+                report.Issues.Add(new PayrollValidationIssue
+                {
+                    EmployeeCode = emp.EmployeeCode,
+                    EmployeeName = emp.FullName,
+                    Severity = "Warning",
+                    Code = "MISSING_BANK_ACCOUNT",
+                    Message = "No primary bank account on file — payment file will skip this employee."
+                });
+
+            // Check shift roster
+            if (!rosteredEmployees.Contains(emp.Id))
+                report.Issues.Add(new PayrollValidationIssue
+                {
+                    EmployeeCode = emp.EmployeeCode,
+                    EmployeeName = emp.FullName,
+                    Severity = "Warning",
+                    Code = "NO_SHIFT_ASSIGNED",
+                    Message = "Employee has no shift roster — present-days calculation may be inaccurate."
+                });
+
+            // Check salary structure
+            var currentJob = emp.JobHistories
+                .Where(jh => jh.ValidTo == null)
+                .OrderByDescending(jh => jh.ValidFrom)
+                .FirstOrDefault();
+
+            if (currentJob?.SalaryTierId == null || !salaryStructureIds.Contains(currentJob.SalaryTierId.Value))
+                report.Issues.Add(new PayrollValidationIssue
+                {
+                    EmployeeCode = emp.EmployeeCode,
+                    EmployeeName = emp.FullName,
+                    Severity = "Error",
+                    Code = "MISSING_SALARY_STRUCTURE",
+                    Message = "No active salary structure assigned — employee will be skipped during payroll processing."
+                });
+        }
+
+        var errorCount = report.Issues.Count(i => i.Severity == "Error");
+        var blockingErrors = report.Issues
+            .Where(i => i.Severity == "Error" && i.Code != "MISSING_BANK_ACCOUNT")
+            .Count();
+
+        report.CanProceed = blockingErrors == 0;
+        report.ReadyCount = employees.Count - report.Issues
+            .Where(i => i.Severity == "Error" && !string.IsNullOrEmpty(i.EmployeeCode))
+            .Select(i => i.EmployeeCode)
+            .Distinct()
+            .Count();
+
+        return report;
+    }
+
     /// <summary>
     /// Get month name from month number
     /// </summary>
     private string GetMonthName(int month)
     {
         return CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(month);
-    }
-
-    /// <summary>
-    /// Calculate weekday count for a given month/year (excludes Sat/Sun)
-    /// </summary>
-    private int CalculateWorkingDays(int month, int year)
-    {
-        var firstDay = new DateTime(year, month, 1);
-        var daysInMonth = DateTime.DaysInMonth(year, month);
-        int workingDays = 0;
-
-        for (int day = 0; day < daysInMonth; day++)
-        {
-            var date = firstDay.AddDays(day);
-            if (date.DayOfWeek != DayOfWeek.Saturday && date.DayOfWeek != DayOfWeek.Sunday)
-            {
-                workingDays++;
-            }
-        }
-
-        return workingDays;
     }
 
     /// <summary>

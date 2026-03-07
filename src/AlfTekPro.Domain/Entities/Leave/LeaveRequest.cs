@@ -10,6 +10,8 @@ public class LeaveRequest : BaseTenantEntity
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
     public decimal DaysCount { get; set; }
+    public bool IsHalfDay { get; set; }
+    public string? HalfDayPeriod { get; set; }  // "Morning" | "Afternoon"
     public string? Reason { get; set; }
     public LeaveRequestStatus Status { get; set; } = LeaveRequestStatus.Pending;
     public Guid? ApprovedBy { get; set; }

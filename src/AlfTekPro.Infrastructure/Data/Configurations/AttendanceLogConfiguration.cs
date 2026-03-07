@@ -72,6 +72,11 @@ public class AttendanceLogConfiguration : IEntityTypeConfiguration<AttendanceLog
             .HasColumnName("late_by_minutes")
             .HasDefaultValue(0);
 
+        builder.Property(a => a.OvertimeMinutes)
+            .IsRequired()
+            .HasColumnName("overtime_minutes")
+            .HasDefaultValue(0);
+
         builder.Property(a => a.IsRegularized)
             .IsRequired()
             .HasColumnName("is_regularized")

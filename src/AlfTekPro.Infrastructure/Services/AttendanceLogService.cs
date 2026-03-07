@@ -255,7 +255,7 @@ public class AttendanceLogService : IAttendanceLogService
         return MapToAttendanceLogResponse(log);
     }
 
-    public async Task<AttendanceLogResponse> RegularizeAttendanceAsync(Guid id, RegularizationRequest request, CancellationToken cancellationToken = default)
+    public async Task<AttendanceLogResponse> RegularizeAttendanceAsync(Guid id, AttendanceLogRegularizationRequest request, CancellationToken cancellationToken = default)
     {
         var log = await _context.AttendanceLogs
             .Include(a => a.Employee)

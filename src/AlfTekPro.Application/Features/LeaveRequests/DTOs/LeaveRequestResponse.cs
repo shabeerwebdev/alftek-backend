@@ -67,6 +67,9 @@ public class LeaveRequestResponse
     /// </summary>
     public decimal DaysCount { get; set; }
 
+    public bool IsHalfDay { get; set; }
+    public string? HalfDayPeriod { get; set; }
+
     /// <summary>
     /// Reason for leave
     /// </summary>

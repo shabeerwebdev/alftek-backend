@@ -47,6 +47,15 @@ public class PayrollRunResponse
     /// </summary>
     public DateTime? ProcessedAt { get; set; }
 
+    /// <summary>Finance approver's UserId.</summary>
+    public Guid? ApprovedBy { get; set; }
+
+    /// <summary>When Finance approved.</summary>
+    public DateTime? ApprovedAt { get; set; }
+
+    /// <summary>Rejection reason (if applicable).</summary>
+    public string? RejectionReason { get; set; }
+
     /// <summary>
     /// S3 path to PDF bundle (if generated)
     /// </summary>
